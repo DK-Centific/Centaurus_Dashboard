@@ -306,6 +306,36 @@ function isEmptyRow(r){
 function liveRows(){const d=activeDS();const rows=(d.rows&&d.rows.length)?d.rows:[];return rows.filter(r=>!isEmptyRow(r))}
 
 // Find the row array inside an arbitrary PA/JSON response shape.
+// Tolerant parser for Power Automate / Office Script responses.
+// Handles: leading BOM/whitespace, double-encoded JSON (a JSON string whose
+// content is itself JSON), and Office Script {"result":"<json-string>"} wrapping.
+// Throws an Error whose message includes a snippet of the raw body on failure.
+function parseFlexibleJSON(raw){
+  let txt=(raw==null?'':String(raw));
+  // strip UTF-8 BOM and surrounding whitespace
+  txt=txt.replace(/^\uFEFF/,'').trim();
+  if(!txt)throw new Error('Empty response body from the flow.');
+  const snippet=()=> txt.slice(0,180).replace(/\s+/g,' ');
+  let val;
+  try{ val=JSON.parse(txt); }
+  catch(e){ throw new Error('Response was not valid JSON. First bytes: '+snippet()); }
+  // Unwrap up to a few layers of common envelopes / double-encoding.
+  for(let i=0;i<4;i++){
+    if(typeof val==='string'){
+      const s=val.trim();
+      // a string that is itself JSON (double-encoded) — parse again
+      if(s&&(s[0]==='['||s[0]==='{')){ try{ val=JSON.parse(s); continue; }catch(e){ break; } }
+      break;
+    }
+    if(val&&typeof val==='object'&&!Array.isArray(val)){
+      // Office Script "Run script" puts the script's return under .result;
+      // some flows nest the table under .body. Unwrap a string/array there.
+      if('result' in val && (typeof val.result==='string'||Array.isArray(val.result)||typeof val.result==='object')){ val=val.result; continue; }
+    }
+    break;
+  }
+  return val;
+}
 function extractRows(payload){
   if(Array.isArray(payload))return payload;
   if(payload&&typeof payload==='object'){
@@ -1467,7 +1497,7 @@ async function listDashboards(){
   // Load flow's HTTP trigger expects POST; send an empty JSON body. Client filters the returned rows.
   const res=await fetch(LOAD_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
   if(!res.ok)throw new Error('HTTP '+res.status);
-  const txt=await res.text();let payload;try{payload=JSON.parse(txt)}catch(e){throw new Error('Load response not JSON')}
+  const txt=await res.text();let payload;try{payload=parseFlexibleJSON(txt)}catch(e){throw new Error(e.message||'Load response not JSON')}
   return extractRows(payload);
 }
 
@@ -1601,7 +1631,7 @@ async function fetchDataset(d,background){
     const res=await fetchWithTimeout(d.url,{method:'GET'},60000);
     if(!res.ok)throw new Error('HTTP '+res.status+' '+res.statusText);
     const txt=await res.text();
-    let payload;try{payload=JSON.parse(txt)}catch(e){throw new Error('Response was not valid JSON')}
+    let payload;try{payload=parseFlexibleJSON(txt)}catch(e){throw new Error(e.message||'Response was not valid JSON')}
     const rows=extractRows(payload);
     if(!rows.length)throw new Error('No rows found in the response (checked array / value / rows / data / items)');
     d.rows=rows;d.loaded=true;d.error=null;
