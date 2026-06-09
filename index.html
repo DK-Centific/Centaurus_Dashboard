@@ -59,9 +59,8 @@ button{font-family:var(--font);cursor:pointer;border:none;background:none;color:
 .head h1{font-size:calc(29px*var(--fscale,1));font-weight:600;letter-spacing:-.8px;outline:none;border-radius:8px;padding:2px 6px;margin:-2px -6px;transition:background .2s,box-shadow .2s;cursor:text}
 .head h1:hover{background:var(--card2)}
 .head h1:focus{background:var(--card);box-shadow:0 0 0 2px var(--accent)}
-.head p{color:var(--text2);font-size:calc(13px*var(--fscale,1));margin-top:3px;opacity:0;transition:opacity .3s var(--ease);pointer-events:none;height:0;overflow:hidden}
-.head:hover p,.head h1:focus ~ p{opacity:1;height:auto;pointer-events:auto}
-.head.editing p{opacity:1;height:auto}
+.head p{color:var(--text2);font-size:calc(13px*var(--fscale,1));opacity:0;max-height:0;margin-top:0;overflow:hidden;pointer-events:none;transition:opacity .45s var(--ease),max-height .45s var(--ease),margin-top .45s var(--ease)}
+.head.editing p{opacity:1;max-height:40px;margin-top:3px;pointer-events:auto}
 .xfilter-pill{display:none;align-items:center;gap:7px;font-size:12.5px;background:var(--card);border:0.5px solid var(--accent);color:var(--accent);padding:7px 13px;border-radius:20px;animation:pop .3s var(--spring)}
 .xfilter-pill.show{display:inline-flex}
 .xfilter-pill .x{cursor:pointer;display:flex}
@@ -286,6 +285,22 @@ const SCHEMES=[
   {name:'Candy',cols:['#378ADD','#D4537E','#EF9F27','#5DCAA5','#9b8cf0','#F0997B','#85B7EB','#ED93B1']}
 ];
 let globalScheme='Apple Pastels'; // name of active global scheme
+let themeOverride={}; // {bg, card, accent} inline overrides on top of the active theme
+function applyThemeOverride(){
+  const b=document.body.style;
+  ['--bg','--bg2','--card','--card2','--accent'].forEach(v=>b.removeProperty(v));
+  if(themeOverride.bg){b.setProperty('--bg',themeOverride.bg);b.setProperty('--bg2',themeOverride.bg)}
+  if(themeOverride.card){b.setProperty('--card',themeOverride.card);
+    // derive a slightly lighter/darker secondary surface from the card color
+    b.setProperty('--card2',shadeColor(themeOverride.card,(theme==='dark'?12:-6)))}
+  if(themeOverride.accent)b.setProperty('--accent',themeOverride.accent);
+}
+function shadeColor(hex,pct){
+  const m=hex.replace('#','');if(m.length!==6)return hex;
+  let r=parseInt(m.slice(0,2),16),g=parseInt(m.slice(2,4),16),bl=parseInt(m.slice(4,6),16);
+  const f=v=>Math.max(0,Math.min(255,Math.round(v+(pct/100)*255)));
+  return '#'+[f(r),f(g),f(bl)].map(x=>x.toString(16).padStart(2,'0')).join('');
+}
 function schemeByName(n){return (SCHEMES.find(s=>s.name===n)||SCHEMES[0]).cols}
 function schemePreview(cols,n){n=n||5;return cols.slice(0,n).map(c=>'<span style="width:18px;height:18px;border-radius:5px;background:'+c+';display:inline-block"></span>').join('')}
 function schemeRows(activeName,onClickAttr){
@@ -1016,7 +1031,16 @@ function openColors(anchor){
   h+='<div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px;border-top:0.5px solid var(--border);padding-top:12px">Fine-tune swatches'+(globalScheme==='__custom__'?' · custom':'')+'</div>';
   h+='<div style="display:flex;flex-wrap:wrap;gap:8px" id="swatchRow">';
   PALETTE.forEach((c,i)=>{h+='<div class="swatch'+(i===pickIdx?' sel':'')+'" data-i="'+i+'" style="background:'+c+'"></div>'});
-  h+='</div><div class="color-input-row"><input type="color" id="pickColor" value="'+PALETTE[pickIdx]+'"><span style="font-size:12px;color:var(--text2)">Editing swatch '+(pickIdx+1)+'</span></div></div>';
+  h+='</div><div class="color-input-row"><input type="color" id="pickColor" value="'+PALETTE[pickIdx]+'"><span style="font-size:12px;color:var(--text2)">Editing swatch '+(pickIdx+1)+'</span></div>';
+  // Background & theme section
+  const cur=k=>themeOverride[k]||css('--'+(k==='bg'?'bg':k==='card'?'card':'accent'))||'#000000';
+  const tv=v=>{v=(v||'').trim();return /^#([0-9a-f]{6})$/i.test(v)?v:'#000000';};
+  h+='<div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px;border-top:0.5px solid var(--border);padding-top:12px;display:flex;justify-content:space-between;align-items:center"><span>Background &amp; theme</span><button class="preset" id="resetTheme" style="width:auto;font-size:11px;color:var(--accent);padding:3px 6px">Reset</button></div>';
+  h+='<div style="display:flex;flex-direction:column;gap:9px">';
+  h+='<div style="display:flex;align-items:center;gap:10px"><input type="color" id="bgColor" value="'+tv(cur("bg"))+'"><span style="font-size:12.5px;color:var(--text2)">Page background</span></div>';
+  h+='<div style="display:flex;align-items:center;gap:10px"><input type="color" id="cardColor" value="'+tv(cur("card"))+'"><span style="font-size:12.5px;color:var(--text2)">Card / tile surface</span></div>';
+  h+='<div style="display:flex;align-items:center;gap:10px"><input type="color" id="accentColor" value="'+tv(cur("accent"))+'"><span style="font-size:12.5px;color:var(--text2)">Accent</span></div>';
+  h+='</div></div>';
   showPop(anchor,h,p=>{
     p.querySelectorAll('.scheme-row').forEach(r=>r.onclick=()=>{
       globalScheme=r.dataset.name;PALETTE=schemeByName(globalScheme).slice();pickIdx=0;
@@ -1025,6 +1049,10 @@ function openColors(anchor){
     p.querySelectorAll('.swatch').forEach(s=>s.onclick=()=>{pickIdx=+s.dataset.i;p.querySelectorAll('.swatch').forEach(x=>x.classList.remove('sel'));s.classList.add('sel');p.querySelector('#pickColor').value=PALETTE[pickIdx];p.querySelector('.color-input-row span').textContent='Editing swatch '+(pickIdx+1)});
     p.querySelector('#pickColor').oninput=e=>{PALETTE[pickIdx]=e.target.value;globalScheme='__custom__';p.querySelector('.swatch[data-i="'+pickIdx+'"]').style.background=e.target.value;refreshAll()};
     p.querySelector('#resetPalette').onclick=()=>{globalScheme='Apple Pastels';PALETTE=schemeByName('Apple Pastels').slice();pickIdx=0;refreshAll();openColors(document.getElementById('moreBtn'))};
+    const bgc=p.querySelector('#bgColor');if(bgc)bgc.oninput=e=>{themeOverride.bg=e.target.value;applyThemeOverride();refreshAll()};
+    const cc=p.querySelector('#cardColor');if(cc)cc.oninput=e=>{themeOverride.card=e.target.value;applyThemeOverride();refreshAll()};
+    const ac=p.querySelector('#accentColor');if(ac)ac.oninput=e=>{themeOverride.accent=e.target.value;applyThemeOverride()};
+    const rt=p.querySelector('#resetTheme');if(rt)rt.onclick=()=>{themeOverride={};applyThemeOverride();refreshAll();openColors(document.getElementById('moreBtn'))};
   });
 };
 
@@ -1050,6 +1078,7 @@ function getState(){
     tiles:tiles,
     globalScheme:globalScheme,
     palette:PALETTE,
+    themeOverride:themeOverride,
     dateRange:dateRange,
     fscale:fscale,
     datasetId:activeDatasetId,
@@ -1061,6 +1090,7 @@ function applyState(s){
   document.getElementById('dashTitle').textContent=s.name||'Untitled dashboard';
   tiles=Array.isArray(s.tiles)?s.tiles:[];
   globalScheme=s.globalScheme||'Apple Pastels';
+  themeOverride=s.themeOverride||{};
   PALETTE=Array.isArray(s.palette)&&s.palette.length?s.palette:schemeByName(globalScheme).slice();
   dateRange=s.dateRange||{preset:'all',from:null,to:null};
   fscale=s.fscale||1;document.body.style.setProperty('--fscale',fscale);
@@ -1069,12 +1099,12 @@ function applyState(s){
   // if the saved dataset differs, switch to it (re-detects schema), else just render
   if(s.datasetId&&s.datasetId!==activeDatasetId&&DATASETS.find(d=>d.id===s.datasetId)){
     switchDatasetThenRender(s.datasetId);
-  } else { setTheme(theme); render(); }
+  } else { setTheme(theme); applyThemeOverride(); render(); }
 }
 async function switchDatasetThenRender(id){
   activeDatasetId=id;setDatasetLabel();
   await loadDataset(id,false);
-  setTheme(theme);render();
+  setTheme(theme);applyThemeOverride();render();
 }
 
 // Save sends a POST as application/json (matches the flow's JSON body validation).
@@ -1280,6 +1310,7 @@ function setTheme(mode){
   document.getElementById('themeIco').innerHTML=mode==='light'
     ?'<circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/>'
     :'<path d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z"/>';
+  applyThemeOverride();
   setTimeout(refreshAll,60);
 }
 let theme='dark';
