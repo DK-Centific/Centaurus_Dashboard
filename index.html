@@ -59,7 +59,9 @@ button{font-family:var(--font);cursor:pointer;border:none;background:none;color:
 .head h1{font-size:calc(29px*var(--fscale,1));font-weight:600;letter-spacing:-.8px;outline:none;border-radius:8px;padding:2px 6px;margin:-2px -6px;transition:background .2s,box-shadow .2s;cursor:text}
 .head h1:hover{background:var(--card2)}
 .head h1:focus{background:var(--card);box-shadow:0 0 0 2px var(--accent)}
-.head p{color:var(--text2);font-size:calc(13px*var(--fscale,1));margin-top:3px}
+.head p{color:var(--text2);font-size:calc(13px*var(--fscale,1));margin-top:3px;opacity:0;transition:opacity .3s var(--ease);pointer-events:none;height:0;overflow:hidden}
+.head:hover p,.head h1:focus ~ p{opacity:1;height:auto;pointer-events:auto}
+.head.editing p{opacity:1;height:auto}
 .xfilter-pill{display:none;align-items:center;gap:7px;font-size:12.5px;background:var(--card);border:0.5px solid var(--accent);color:var(--accent);padding:7px 13px;border-radius:20px;animation:pop .3s var(--spring)}
 .xfilter-pill.show{display:inline-flex}
 .xfilter-pill .x{cursor:pointer;display:flex}
@@ -77,6 +79,15 @@ button{font-family:var(--font);cursor:pointer;border:none;background:none;color:
 }
 @keyframes pop{0%{opacity:0;transform:scale(.92)}100%{opacity:1;transform:scale(1)}}
 @keyframes spin{to{transform:rotate(360deg)}}
+@keyframes toastIn{0%{opacity:0;transform:translateY(14px) scale(.96)}100%{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes miniPop{0%{opacity:0;transform:scale(.94) translateY(-8px)}100%{opacity:1;transform:scale(1) translateY(0)}}
+.mini-pop{position:absolute;top:54px;right:16px;width:300px;max-height:70vh;overflow-y:auto;background:var(--bg2);border:0.5px solid var(--border2);border-radius:16px;padding:16px;z-index:90;box-shadow:0 18px 50px rgba(0,0,0,.4);transform-origin:top right;animation:miniPop .3s var(--spring)}
+.checkbox-row{display:flex;align-items:center;gap:10px;cursor:pointer;padding:6px 0;font-size:13px}
+.checkbox-box{width:20px;height:20px;border-radius:6px;border:1.5px solid var(--border2);display:flex;align-items:center;justify-content:center;flex:none;transition:all .2s}
+.checkbox-row.on .checkbox-box{background:var(--accent);border-color:var(--accent)}
+.checkbox-row .checkbox-box svg{opacity:0;transition:opacity .2s}
+.checkbox-row.on .checkbox-box svg{opacity:1}
+.toast{display:flex;align-items:center;gap:9px;background:var(--glass);backdrop-filter:blur(22px) saturate(170%);-webkit-backdrop-filter:blur(22px) saturate(170%);border:0.5px solid var(--border2);border-radius:14px;padding:11px 16px;font-size:13px;color:var(--text);box-shadow:0 12px 40px rgba(0,0,0,.35);animation:toastIn .35s var(--spring);pointer-events:auto}
 .tile:hover{border-color:var(--border2);box-shadow:0 8px 30px rgba(0,0,0,.22)}
 .tile.armed{cursor:grabbing}
 .tile.lifted{
@@ -180,17 +191,19 @@ input[type=color]{width:42px;height:30px;border-radius:8px;border:0.5px solid va
   </div>
 </div>
 <div class="head">
-  <div><h1 id="dashTitle" contenteditable="true" spellcheck="false" title="Click to rename">Centaurus Ops Dashboard</h1><p>Demo v0.2 · 220 rows mock data · hold a tile to drag, click chart values to cross-filter · click the title to rename</p></div>
+  <div><h1 id="dashTitle" contenteditable="true" spellcheck="false" title="Click to rename">Centaurus Ops Dashboard</h1><p id="dashHint">Hold a tile to drag · click chart values to cross-filter · click the title to rename</p></div>
   <span class="xfilter-pill" id="xfilterPill"><svg class="ico" style="width:14px;height:14px" viewBox="0 0 24 24"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg><span id="xfilterLabel"></span><span class="x" id="xfilterClear"><svg class="ico" style="width:14px;height:14px" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></span></span>
 </div>
 <div style="padding:0 26px"><div id="dsStatus" style="display:none;align-items:center;gap:8px;font-size:12px;padding:8px 13px;border-radius:10px;margin-top:6px"></div></div>
 <div id="pageFilterBar" style="padding:0 26px;margin-top:8px;display:none;flex-wrap:wrap;gap:7px;align-items:center"></div>
+<div id="toastHost" style="position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:200;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none"></div>
 <div class="canvas" id="canvas"><div class="grid-wrap"><div class="grid" id="grid"></div></div></div>
 
 <div class="scrim" id="scrim"></div>
 <div class="drawer" id="drawer">
   <div class="drawer-head"><h3 id="drawerTitle">Configure tile</h3>
-    <button class="icon-btn" id="closeDrawer" style="width:32px;height:32px"><svg class="ico" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+    <div style="display:flex;align-items:center;gap:6px"><button class="icon-btn" id="moreSettingsBtn" title="More settings" style="width:32px;height:32px"><svg class="ico" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>
+    <button class="icon-btn" id="closeDrawer" style="width:32px;height:32px"><svg class="ico" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div>
   </div>
   <div class="drawer-body" id="drawerBody"></div>
   <div class="drawer-foot">
@@ -481,16 +494,30 @@ function renderKpi(el,t){
   if(xfilter)rows=rows.filter(r=>String(r[xfilter.col])===xfilter.val);
   const vals=rows.map(r=>t.measure==='__count__'?1:r[t.measure]);
   let v=aggregate(vals,t.agg);
-  const disp=t.agg==='count'?v.toLocaleString():(+v.toFixed(1)).toLocaleString();
+  const fmt=n=>t.agg==='count'?(+n).toLocaleString():(+(+n).toFixed(1)).toLocaleString();
+  const disp=fmt(v);
   if(t._delta===undefined)t._delta=(Math.random()*30-8);
   const up=t._delta>=0;
-  // per-tile number size (px, scaled by global fscale) + optional accent color
   const baseSize=t.numSize||28;
   const sizePx=Math.round(baseSize*fscale);
-  // resolve accent: use the tile's first scheme color if numAccent on, else default text color
   const accent=t.numAccent?tileColors(t,1)[0]:'';
   const valStyle='font-size:'+sizePx+'px'+(accent?(';color:'+accent):'');
-  el.innerHTML='<div class="val" style="'+valStyle+'">'+disp+'</div><div class="delta '+(up?'up':'down')+'"><svg class="ico" style="width:13px;height:13px" viewBox="0 0 24 24"><path d="'+(up?'M7 17L17 7M17 7H9M17 7v8':'M7 7l10 10M17 17H9M17 17V9')+'"/></svg>'+Math.abs(t._delta).toFixed(0)+'% vs prior period</div>';
+  let html='<div class="val" style="'+valStyle+'">'+disp+'</div><div class="delta '+(up?'up':'down')+'"><svg class="ico" style="width:13px;height:13px" viewBox="0 0 24 24"><path d="'+(up?'M7 17L17 7M17 7H9M17 7v8':'M7 7l10 10M17 17H9M17 17V9')+'"/></svg>'+Math.abs(t._delta).toFixed(0)+'% vs prior period</div>';
+  // optional dimension breakdown: show each category's value, top highlighted
+  if(t.dim&&CAT.includes(t.dim)){
+    const g=groupAgg(rows,t.dim,t.measure,t.agg).sort((a,b)=>b.val-a.val);
+    if(g.length){
+      const accentCol=tileColors(t,1)[0];
+      const max=g[0].val||1;
+      html+='<div style="margin-top:12px;display:flex;flex-direction:column;gap:5px;overflow-y:auto;max-height:100%">';
+      g.slice(0,6).forEach((d,i)=>{
+        const pct=Math.max(3,Math.round((d.val/max)*100));
+        html+='<div style="display:flex;align-items:center;gap:8px;font-size:'+Math.round(11*fscale)+'px"><span style="flex:none;width:30%;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+d.key+'</span><span style="flex:1;height:6px;border-radius:3px;background:var(--card2);position:relative"><span style="position:absolute;inset:0 auto 0 0;width:'+pct+'%;border-radius:3px;background:'+(i===0?accentCol:'var(--border2)')+'"></span></span><span style="flex:none;color:'+(i===0?accentCol:'var(--text2)')+';font-weight:'+(i===0?'500':'400')+';min-width:auto">'+fmt(d.val)+'</span></div>';
+      });
+      html+='</div>';
+    }
+  }
+  el.innerHTML=html;
 }
 
 function setXfilter(f){
@@ -513,7 +540,7 @@ function refreshAll(){
 
 function tileSubHTML(t){
   const label=t.type==='kpi'?'':(CHART_TYPES.find(c=>c.v===t.type)||{}).label;
-  if(t.type!=='kpi'&&t.showTotal){
+  if((t.type==='bar'||t.type==='pie')&&t.showTotal){
     const tot=tileTotal(t);
     if(tot){
       const sz=t.totalSize||13;
@@ -682,7 +709,7 @@ function attachResize(el,t){
 
 /* ---------- drawer / config (same adaptive engine + per-series colors) ---------- */
 function openDrawer(id){editingId=id;draft=JSON.parse(JSON.stringify(tiles.find(t=>t.id===id)));normalizeDraft();buildDrawer();document.getElementById('drawer').classList.add('open');document.getElementById('scrim').classList.add('open')}
-function closeDrawer(){document.getElementById('drawer').classList.remove('open');document.getElementById('scrim').classList.remove('open');editingId=null;draft=null}
+function closeDrawer(){if(document.getElementById('miniPop'))closeMoreSettings();document.getElementById('drawer').classList.remove('open');document.getElementById('scrim').classList.remove('open');editingId=null;draft=null}
 function opt(arr,sel){return arr.map(o=>'<option value="'+o+'"'+(o===sel?' selected':'')+'>'+o+'</option>').join('')}
 function buildDrawer(){
   const t=draft;const b=document.getElementById('drawerBody');
@@ -693,17 +720,46 @@ function buildDrawer(){
   h+='<div id="adaptive">'+adaptiveFields(t)+'</div>';
   h+='<div class="field"><label>Tile size</label><div class="size-grid"><div><label style="text-transform:none;letter-spacing:0;color:var(--text3)">Width ('+t.w+'/12)</label><input type="number" id="f_w" min="2" max="12" value="'+t.w+'"></div><div><label style="text-transform:none;letter-spacing:0;color:var(--text3)">Height ('+t.h+')</label><input type="number" id="f_h" min="2" max="12" value="'+t.h+'"></div></div></div>';
   h+='<div class="field" id="tileSchemeField"></div>';h+='<div class="field" id="seriesColorField"></div>';
-  if(t.type!=='kpi'){
-    h+='<div class="field"><label>Totals &amp; labels</label><div class="seg" id="labelSeg" style="margin-bottom:8px"><button data-v="0" class="'+(t.showLabels?'':'on')+'">No labels</button><button data-v="1" class="'+(t.showLabels?'on':'')+'">Show data labels</button></div><div class="seg" id="totalSeg" style="margin-bottom:8px"><button data-v="0" class="'+(t.showTotal?'':'on')+'">No total</button><button data-v="1" class="'+(t.showTotal?'on':'')+'">Show header total</button></div><div id="totalSizeWrap" style="display:'+(t.showTotal?'block':'none')+'"><label style="text-transform:none;letter-spacing:0;color:var(--text3);margin-bottom:6px">Total number size</label><div style="display:flex;align-items:center;gap:10px"><input type="range" id="f_totalsize" min="11" max="28" step="1" value="'+(t.totalSize||13)+'" style="flex:1"><span id="totalsizeOut" style="font-size:12.5px;color:var(--text2);min-width:42px;text-align:right">'+(t.totalSize||13)+'px</span></div></div></div>';
-  }
-  h+='<div class="field"><label>Filters (this tile)</label><div class="filter-list" id="filterList"></div><span class="chip add" id="addFilter"><svg class="ico" style="width:13px;height:13px" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Add filter</span></div>';
+  // (Totals & labels + Filters moved into the More-settings popup)
   b.innerHTML=h;
   document.getElementById('f_type').onchange=e=>{draft.type=e.target.value;normalizeDraft();document.getElementById('adaptive').innerHTML=adaptiveFields(draft);bindAdaptive();renderTileScheme();renderSeriesColors()};
   document.getElementById('f_title').oninput=e=>draft.title=e.target.value;
   document.getElementById('f_w').oninput=e=>draft.w=+e.target.value;
   document.getElementById('f_h').oninput=e=>draft.h=+e.target.value;
-  document.getElementById('addFilter').onclick=()=>{draft.filters.push({col:(CAT[0]||COLS[0]||''),vals:[]});renderFilters()};
-  bindAdaptive();renderFilters();renderTileScheme();renderSeriesColors();
+  const _af=document.getElementById('addFilter');if(_af)_af.onclick=()=>{draft.filters.push({col:(CAT[0]||COLS[0]||''),vals:[]});renderFilters()};
+  bindAdaptive();renderTileScheme();renderSeriesColors();
+  const _ms=document.getElementById('moreSettingsBtn');if(_ms)_ms.onclick=toggleMoreSettings;
+}
+function closeMoreSettings(){const p=document.getElementById('miniPop');if(p)p.remove();document.removeEventListener('pointerdown',_msOutside,true)}
+function _msOutside(e){const p=document.getElementById('miniPop');if(p&&!p.contains(e.target)&&!e.target.closest('#moreSettingsBtn'))closeMoreSettings()}
+function toggleMoreSettings(){
+  if(document.getElementById('miniPop')){closeMoreSettings();return}
+  const t=draft;
+  const isBarPie=(t.type==='bar'||t.type==='pie');
+  const p=document.createElement('div');p.className='mini-pop';p.id='miniPop';
+  let h='<div style="font-size:14px;font-weight:600;margin-bottom:12px">More settings</div>';
+  if(t.type!=='kpi'){
+    // Data labels toggle (all chart types)
+    h+='<div class="checkbox-row'+(t.showLabels?' on':'')+'" id="ms_labels"><span class="checkbox-box"><svg class="ico" style="width:13px;height:13px;stroke:#fff" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></span>Show data labels</div>';
+    // Totals checkbox — ONLY for bar/pie (visual graphs)
+    if(isBarPie){
+      h+='<div class="checkbox-row'+(t.showTotal?' on':'')+'" id="ms_total"><span class="checkbox-box"><svg class="ico" style="width:13px;height:13px;stroke:#fff" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></span>Show total number in header</div>';
+      h+='<div id="ms_totalsize" style="display:'+(t.showTotal?'block':'none')+';margin:8px 0 4px 30px"><label style="text-transform:none;letter-spacing:0;color:var(--text3);font-size:11px;display:block;margin-bottom:6px">Total number size</label><div style="display:flex;align-items:center;gap:10px"><input type="range" id="ms_tsize" min="11" max="28" step="1" value="'+(t.totalSize||13)+'" style="flex:1"><span id="ms_tsizeout" style="font-size:12px;color:var(--text2);min-width:38px;text-align:right">'+(t.totalSize||13)+'px</span></div></div>';
+    } else {
+      h+='<div style="font-size:11px;color:var(--text3);margin:2px 0 8px 30px">Header total is available for bar &amp; pie tiles.</div>';
+    }
+  }
+  // Filters (this tile) — for all tile types
+  h+='<div style="border-top:0.5px solid var(--border);margin-top:12px;padding-top:12px"><label style="font-size:11.5px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:8px">Filters (this tile)</label><div class="filter-list" id="filterList"></div><span class="chip add" id="addFilter"><svg class="ico" style="width:13px;height:13px" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Add filter</span></div>';
+  p.innerHTML=h;
+  document.getElementById('drawer').appendChild(p);
+  // bind
+  const lb=document.getElementById('ms_labels');if(lb)lb.onclick=()=>{draft.showLabels=!draft.showLabels;lb.classList.toggle('on',draft.showLabels)};
+  const tt=document.getElementById('ms_total');if(tt)tt.onclick=()=>{draft.showTotal=!draft.showTotal;tt.classList.toggle('on',draft.showTotal);const w=document.getElementById('ms_totalsize');if(w)w.style.display=draft.showTotal?'block':'none'};
+  const ts=document.getElementById('ms_tsize');if(ts)ts.oninput=e=>{draft.totalSize=+e.target.value;const o=document.getElementById('ms_tsizeout');if(o)o.textContent=e.target.value+'px'};
+  const af=document.getElementById('addFilter');if(af)af.onclick=()=>{draft.filters.push({col:(CAT[0]||COLS[0]||''),vals:[]});renderFilters()};
+  renderFilters();
+  setTimeout(()=>document.addEventListener('pointerdown',_msOutside,true),0);
 }
 function seriesKeysFor(t){
   const rows=dateFiltered();
@@ -771,6 +827,7 @@ function adaptiveFields(t){
   const aggField='<div class="field"><label>Aggregation</label><select id="f_agg">'+opt(['count','sum','avg','min','max'],t.agg)+'</select></div>';
   let h='';
   if(t.type==='kpi'){h+='<div class="field"><label>Measure</label>'+measSelect('f_measure',t.measure)+'</div>'+aggField;
+    h+='<div class="field"><label>Breakdown dimension (optional)</label><select id="f_kpidim"><option value="">None — single number</option>'+opt(CAT.filter(c=>c!=='Date'),t.dim||'')+'</select></div>';
     h+='<div class="field"><label>Number size</label><div style="display:flex;align-items:center;gap:10px"><input type="range" id="f_numsize" min="18" max="72" step="1" value="'+(t.numSize||28)+'" style="flex:1"><span id="numsizeOut" style="font-size:12.5px;color:var(--text2);min-width:42px;text-align:right">'+(t.numSize||28)+'px</span></div></div>';
     h+='<div class="field"><label>Number color</label><div class="seg" id="numaccentSeg"><button data-v="0" class="'+(t.numAccent?'':'on')+'">Default</button><button data-v="1" class="'+(t.numAccent?'on':'')+'">Accent</button></div></div>'}
   else if(t.type==='bar'||t.type==='line'||t.type==='pie'){h+='<div class="field"><label>Dimension</label><select id="f_dim">'+opt(CAT,t.dim)+'</select></div><div class="field"><label>Measure</label>'+measSelect('f_measure',t.measure)+'</div>'+aggField}
@@ -790,6 +847,7 @@ function bindAdaptive(){
   if(g('f_xmeasure'))g('f_xmeasure').onchange=e=>draft.xmeasure=e.target.value;
   if(g('f_color'))g('f_color').onchange=e=>{draft.color=e.target.value;renderSeriesColors()};
   if(g('f_bins'))g('f_bins').oninput=e=>draft.bins=+e.target.value;
+  if(g('f_kpidim'))g('f_kpidim').onchange=e=>{draft.dim=e.target.value;};
   if(g('f_numsize'))g('f_numsize').oninput=e=>{draft.numSize=+e.target.value;const o=g('numsizeOut');if(o)o.textContent=e.target.value+'px'};
   if(g('numaccentSeg'))g('numaccentSeg').querySelectorAll('button').forEach(b=>b.onclick=()=>{draft.numAccent=b.dataset.v==='1';g('numaccentSeg').querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on')});
   if(g('labelSeg'))g('labelSeg').querySelectorAll('button').forEach(b=>b.onclick=()=>{draft.showLabels=b.dataset.v==='1';g('labelSeg').querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on')});
@@ -798,7 +856,7 @@ function bindAdaptive(){
   [0,1,2].forEach(i=>{if(g('f_sankey'+i))g('f_sankey'+i).onchange=e=>{draft.sankeyCols[i]=e.target.value}});
 }
 function renderFilters(){
-  const list=document.getElementById('filterList');list.innerHTML='';
+  const list=document.getElementById('filterList');if(!list)return;list.innerHTML='';
   draft.filters.forEach((f,i)=>{
     const vals=[...new Set(liveRows().map(r=>String(r[f.col])))].sort();
     const item=document.createElement('div');item.className='filter-item';
@@ -1033,12 +1091,12 @@ async function saveDashboard(isShared){
   try{
     const res=await fetch(SAVE_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     if(!res.ok)throw new Error('HTTP '+res.status);
-    setStatus('ok',(isShared?'Published':'Saved')+' “'+name+'” · '+new Date().toLocaleTimeString());
+    toast((isShared?'Published':'Saved')+' “'+name+'”',(isShared?'load':'save'));setStatus('ok',(isShared?'Published':'Saved')+' “'+name+'” · '+new Date().toLocaleTimeString());
     return true;
   }catch(err){
     let m=String(err.message||err);
     if(/Failed to fetch|NetworkError|CORS/i.test(m))m='Could not reach the Save flow (likely CORS — the flow Response needs Access-Control-Allow-Origin for this site).';
-    setStatus('err','Save failed: '+m);return false;
+    toast('Save failed','err');setStatus('err','Save failed: '+m);return false;
   }
 }
 
@@ -1096,7 +1154,7 @@ async function openGallery(anchor){
       h+='<div class="scheme-list">'+(shared.length?shared.map(card).join(''):'<div style="font-size:12px;color:var(--text3);padding:6px 0">No shared dashboards yet.</div>')+'</div>';
       p.querySelector('#gal_body').innerHTML=h;
       p.querySelectorAll('.gal-open').forEach(c=>c.onclick=()=>{
-        try{const cfg=JSON.parse(decodeURIComponent(c.dataset.cfg));currentDashId=c.dataset.id;closePop();applyState(cfg);setStatus('ok','Opened “'+(cfg.name||'dashboard')+'”')}
+        try{const cfg=JSON.parse(decodeURIComponent(c.dataset.cfg));currentDashId=c.dataset.id;closePop();applyState(cfg);toast('Loaded “'+(cfg.name||'dashboard')+'”','load');setStatus('ok','Opened “'+(cfg.name||'dashboard')+'”')}
         catch(e){setStatus('err','Could not open that dashboard')}
       });
     }catch(err){
@@ -1108,8 +1166,22 @@ async function openGallery(anchor){
 };
 
 /* ---------- datasets (live PA + mock) ---------- */
-function setStatus(kind,msg){
+function toast(msg,kind){
+  const host=document.getElementById('toastHost');if(!host)return;
+  const t=document.createElement('div');t.className='toast';
+  const c=kind==='err'?'#e0827d':(kind==='save'?'#5DCAA5':'#7F77DD');
+  const ico=kind==='save'?'<path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/>':
+            kind==='load'?'<path d="M21 12a9 9 0 11-6.2-8.5"/><path d="M21 3v6h-6"/>':
+            kind==='err'?'<circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>':
+            '<path d="M20 6L9 17l-5-5"/>';
+  t.innerHTML='<svg class="ico" style="width:17px;height:17px;stroke:'+c+'" viewBox="0 0 24 24">'+ico+'</svg><span>'+msg+'</span>';
+  host.appendChild(t);
+  setTimeout(()=>{t.style.transition='opacity .4s,transform .4s';t.style.opacity='0';t.style.transform='translateY(10px)';setTimeout(()=>t.remove(),400)},3000);
+}
+let _statusTimer=null;
+function setStatus(kind,msg,timeoutMs){
   const el=document.getElementById('dsStatus');
+  if(_statusTimer){clearTimeout(_statusTimer);_statusTimer=null}
   if(!msg){el.style.display='none';return}
   const styles={
     info:['var(--card2)','var(--border)','var(--text2)'],
@@ -1121,6 +1193,8 @@ function setStatus(kind,msg){
   const ico=kind==='ok'?'<path d="M20 6L9 17l-5-5"/>':kind==='err'?'<circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>':'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>';
   el.style.cssText='display:flex;align-items:center;gap:8px;font-size:12px;padding:8px 13px;border-radius:10px;margin-top:6px;background:'+bg+';border:0.5px solid '+bd+';color:'+fg;
   el.innerHTML='<svg class="ico" style="width:14px;height:14px;stroke:'+fg+'" viewBox="0 0 24 24">'+ico+'</svg><span>'+msg+'</span>';
+  const ms=timeoutMs!==undefined?timeoutMs:(kind==='err'?0:4000);
+  if(ms>0)_statusTimer=setTimeout(()=>{el.style.opacity='0';el.style.transition='opacity .4s';setTimeout(()=>{el.style.display='none';el.style.opacity='1'},400)},ms);
 }
 function setDatasetLabel(){document.getElementById('datasetLabel').textContent=activeDS().name.replace(/\s*\(.*\)$/,'')}
 function spinRefresh(on){const i=document.getElementById('refreshIco');i.style.transition=on?'none':'transform .3s';i.style.animation=on?'spin 1s linear infinite':'none'}
@@ -1233,7 +1307,8 @@ function seed(){
 
 const dashTitle=document.getElementById('dashTitle');
 dashTitle.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();dashTitle.blur()}});
-dashTitle.addEventListener('blur',()=>{const t=dashTitle.textContent.trim();dashTitle.textContent=t||'Untitled dashboard'});
+dashTitle.addEventListener('focus',()=>{document.querySelector('.head').classList.add('editing')});
+dashTitle.addEventListener('blur',()=>{document.querySelector('.head').classList.remove('editing');const t=dashTitle.textContent.trim();dashTitle.textContent=t||'Untitled dashboard'});
 applySchema(liveRows()); /* establish COLS/CAT/NUM for mock before seeding */
 setDatasetLabel();
 seed();setDateLabel();render();setTheme('dark');
