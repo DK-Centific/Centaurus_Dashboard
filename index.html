@@ -73,13 +73,55 @@ button{font-family:var(--font);cursor:pointer;border:none;background:none;color:
 .tile{
   background:var(--card);border:0.5px solid var(--border);border-radius:var(--radius);
   padding:16px 18px;position:relative;overflow:hidden;
-  transition:border-color .3s,box-shadow .35s var(--ease),transform .42s var(--spring),opacity .3s;
+  transition:border-color .3s,box-shadow .35s var(--ease),transform .42s var(--spring),opacity .3s,grid-column .38s var(--ease),grid-row .38s var(--ease);
   display:flex;flex-direction:column;animation:pop .45s var(--spring);touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;
 }
+.grid{transition:none}
+.tile.resizing{
+  transition:box-shadow .25s var(--ease),transform .25s var(--ease);
+  box-shadow:0 18px 50px rgba(0,0,0,.32);transform:scale(1.012);z-index:30;
+  border-color:var(--accent);
+}
+.tile.resizing .plot,.tile.resizing .tbl-wrap{transition:none}
+.tile .resize-h{transition:opacity .2s,transform .2s var(--spring)}
+.tile.resizing .resize-h{transform:scale(1.25);opacity:1;color:var(--accent)}
 @keyframes pop{0%{opacity:0;transform:scale(.92)}100%{opacity:1;transform:scale(1)}}
 @keyframes spin{to{transform:rotate(360deg)}}
-@keyframes toastIn{0%{opacity:0;transform:translateY(14px) scale(.96)}100%{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes toastIn{0%{opacity:0;transform:translateY(-14px) scale(.96)}100%{opacity:1;transform:translateY(0) scale(1)}}
 @keyframes miniPop{0%{opacity:0;transform:scale(.94) translateY(-8px)}100%{opacity:1;transform:scale(1) translateY(0)}}
+.tbl-wrap{flex:1;min-height:0;overflow:auto;border-radius:10px}
+.data-tbl{width:100%;border-collapse:collapse;font-size:calc(12px*var(--fscale,1))}
+.data-tbl th,.data-tbl td{border:0.5px solid var(--border);padding:0;text-align:left;position:relative}
+.data-tbl thead th{background:var(--card2);font-weight:500;color:var(--text2);position:sticky;top:0;z-index:2}
+.data-tbl th .th-text{display:inline-block;padding:7px 22px 7px 10px;min-width:40px;outline:none}
+.data-tbl th .th-text:focus{background:var(--card);box-shadow:inset 0 0 0 1.5px var(--accent)}
+.th-del,.row-del{position:absolute;top:50%;transform:translateY(-50%);right:4px;width:16px;height:16px;border-radius:4px;background:transparent;color:var(--text3);font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s}
+.data-tbl th:hover .th-del,.data-tbl tr:hover .row-del{opacity:1}
+.th-del:hover,.row-del:hover{background:rgba(224,130,125,.18);color:#e0827d}
+.th-add{width:30px;text-align:center}
+.col-add{width:20px;height:20px;border-radius:5px;color:var(--text3);font-size:15px;background:transparent}
+.col-add:hover{background:var(--card);color:var(--accent)}
+.data-tbl td .cell{display:block;padding:7px 10px;outline:none;min-height:14px}
+.data-tbl td .cell:focus{background:var(--card2);box-shadow:inset 0 0 0 1.5px var(--accent)}
+.data-tbl td.row-act{width:26px;text-align:center}
+.tbl-foot{padding:8px 0 2px}
+.tbl-topbar{display:flex;justify-content:flex-end;padding:0 0 8px}
+.pill-reset{font-size:11px;color:var(--text2);background:var(--card2);border:0.5px solid var(--border2);border-radius:14px;padding:4px 11px;cursor:pointer;transition:all .2s;animation:pop .3s var(--spring)}
+.pill-reset:hover{border-color:var(--accent);color:var(--accent)}
+.tile-menu .pill-reset{margin-right:8px;animation:pop .25s var(--spring)}
+.col-add-menu{position:fixed;width:210px;max-height:320px;overflow-y:auto;background:var(--bg2);border:0.5px solid var(--border2);border-radius:12px;padding:6px;z-index:120;box-shadow:0 14px 44px rgba(0,0,0,.4);animation:miniPop .22s var(--spring)}
+.cam-title{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;padding:6px 8px 4px}
+.cam-item{font-size:12.5px;color:var(--text);padding:8px 10px;border-radius:7px;cursor:pointer}
+.cam-item:hover{background:var(--card2)}
+.cam-custom{color:var(--accent)}
+.cam-empty{font-size:12px;color:var(--text3);padding:8px 10px}
+.cam-sep{height:0.5px;background:var(--border);margin:5px 4px}
+.th-sort{display:inline-flex;align-items:center;gap:5px;cursor:pointer;padding:7px 22px 7px 10px;user-select:none}
+.th-sort .th-text{padding:0!important}
+.sort-ico{font-size:11px}
+.data-tbl th .th-text:focus{background:var(--card);box-shadow:inset 0 0 0 1.5px var(--accent)}
+.tbl-btn{font-size:12px;color:var(--text2);border:0.5px dashed var(--border2);border-radius:8px;padding:6px 12px;transition:all .2s}
+.tbl-btn:hover{border-color:var(--accent);color:var(--accent)}
 .mini-pop{position:absolute;top:54px;right:16px;width:300px;max-height:70vh;overflow-y:auto;background:var(--bg2);border:0.5px solid var(--border2);border-radius:16px;padding:16px;z-index:90;box-shadow:0 18px 50px rgba(0,0,0,.4);transform-origin:top right;animation:miniPop .3s var(--spring)}
 .checkbox-row{display:flex;align-items:center;gap:10px;cursor:pointer;padding:6px 0;font-size:13px}
 .checkbox-box{width:20px;height:20px;border-radius:6px;border:1.5px solid var(--border2);display:flex;align-items:center;justify-content:center;flex:none;transition:all .2s}
@@ -193,9 +235,8 @@ input[type=color]{width:42px;height:30px;border-radius:8px;border:0.5px solid va
   <div><h1 id="dashTitle" contenteditable="true" spellcheck="false" title="Click to rename">Centaurus Ops Dashboard</h1><p id="dashHint">Hold a tile to drag · click chart values to cross-filter · click the title to rename</p></div>
   <span class="xfilter-pill" id="xfilterPill"><svg class="ico" style="width:14px;height:14px" viewBox="0 0 24 24"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg><span id="xfilterLabel"></span><span class="x" id="xfilterClear"><svg class="ico" style="width:14px;height:14px" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></span></span>
 </div>
-<div style="padding:0 26px"><div id="dsStatus" style="display:none;align-items:center;gap:8px;font-size:12px;padding:8px 13px;border-radius:10px;margin-top:6px"></div></div>
 <div id="pageFilterBar" style="padding:0 26px;margin-top:8px;display:none;flex-wrap:wrap;gap:7px;align-items:center"></div>
-<div id="toastHost" style="position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:200;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none"></div>
+<div id="toastHost" style="position:fixed;top:18px;left:50%;transform:translateX(-50%);z-index:300;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none"></div>
 <div class="canvas" id="canvas"><div class="grid-wrap"><div class="grid" id="grid"></div></div></div>
 
 <div class="scrim" id="scrim"></div>
@@ -222,10 +263,21 @@ let DATASETS=[
 ];
 let activeDatasetId='mock';
 // live, mutable column model derived from the active dataset
-let COLS=[], CAT=[], NUM=[];
+let COLS=[], CAT=[], NUM=[], DATECOLS=[];
 
 function activeDS(){return DATASETS.find(d=>d.id===activeDatasetId)||DATASETS[0]}
-function liveRows(){const d=activeDS();return (d.rows&&d.rows.length)?d.rows:[]}
+// A row is "empty" when every real data field is blank (ignores PA metadata keys).
+const META_KEYS=['@odata.etag','ItemInternalId','__rowNum__'];
+function isEmptyRow(r){
+  if(!r||typeof r!=='object')return true;
+  for(const k in r){
+    if(META_KEYS.includes(k))continue;
+    const v=r[k];
+    if(v!==null&&v!==undefined&&String(v).trim()!=='')return false;
+  }
+  return true;
+}
+function liveRows(){const d=activeDS();const rows=(d.rows&&d.rows.length)?d.rows:[];return rows.filter(r=>!isEmptyRow(r))}
 
 // Find the row array inside an arbitrary PA/JSON response shape.
 function extractRows(payload){
@@ -252,7 +304,7 @@ function detectSchema(rows){
   const keySet=new Set();
   sample.forEach(r=>Object.keys(r||{}).forEach(k=>keySet.add(k)));
   const allCols=[...keySet];
-  const num=[],cat=[];
+  const num=[],cat=[],dateCols=[];
   allCols.forEach(c=>{
     let seen=0,numeric=0,dateLike=0;
     for(const r of sample){
@@ -261,16 +313,22 @@ function detectSchema(rows){
       seen++;
       const s=String(v).trim();
       if(/^-?\d+(\.\d+)?$/.test(s)&&isFinite(+s))numeric++;
-      if(/^\d{4}-\d{2}-\d{2}/.test(s))dateLike++;
+      if(isDateValue(v))dateLike++;
     }
-    if(seen>0&&numeric===seen&&dateLike===0)num.push(c);
+    // numeric column only if all numeric AND not a date column (avoid serial-date cols being "numeric")
+    if(seen>0&&numeric===seen&&dateLike!==seen)num.push(c);
     else cat.push(c);
+    if(seen>0&&dateLike===seen)dateCols.push(c); // every non-empty value parses as a date
   });
-  return {cols:allCols,cat,num};
+  return {cols:allCols,cat,num,dateCols};
 }
 function applySchema(rows){
   const s=detectSchema(rows);
-  COLS=s.cols;CAT=s.cat;NUM=s.num;
+  COLS=s.cols;CAT=s.cat;NUM=s.num;DATECOLS=s.dateCols||[];
+  // pick a default date column for the range filter
+  if(!dateRange.col||!DATECOLS.includes(dateRange.col)){
+    dateRange.col=DATECOLS.includes('Date')?'Date':(DATECOLS[0]||'');
+  }
 }
 const DEFAULT_PALETTE = ['#7F77DD','#9b8cf0','#c5b8f7','#e0827d','#5DCAA5','#EF9F27','#85B7EB','#ED93B1'];
 let PALETTE = DEFAULT_PALETTE.slice();
@@ -307,28 +365,53 @@ function schemeRows(activeName,onClickAttr){
   return SCHEMES.map(s=>'<div class="scheme-row'+(s.name===activeName?' on':'')+'" data-name="'+s.name+'"><span style="font-size:12.5px;color:var(--text)">'+s.name+'</span><span style="display:flex;gap:3px">'+schemePreview(s.cols)+'</span></div>').join('');
 }
 
-const CHART_TYPES=[{v:'kpi',label:'KPI metric'},{v:'bar',label:'Bar graph'},{v:'pie',label:'Pie chart'},{v:'line',label:'Line graph'},{v:'stacked',label:'Stacked bar'},{v:'histogram',label:'Histogram'},{v:'box',label:'Box plot'},{v:'scatter',label:'Scatter plot'},{v:'heatmap',label:'Heatmap'},{v:'sankey',label:'Sankey'}];
+const CHART_TYPES=[{v:'kpi',label:'KPI metric'},{v:'bar',label:'Bar graph'},{v:'pie',label:'Pie chart'},{v:'line',label:'Line graph'},{v:'stacked',label:'Stacked bar'},{v:'histogram',label:'Histogram'},{v:'box',label:'Box plot'},{v:'scatter',label:'Scatter plot'},{v:'heatmap',label:'Heatmap'},{v:'sankey',label:'Sankey'},{v:'table',label:'Table'}];
 
 let tiles=[];
 let editingId=null,draft=null;
 let xfilter=null; // {col, val}
-let dateRange={preset:'30',from:null,to:null};
+let dateRange={preset:'30',from:null,to:null,col:''};
 let pageFilters=[]; // [{col, vals:[]}] hard-applied to every tile
 
 function uid(){return 'T'+Math.random().toString(36).slice(2,8)}
+// Parse many date shapes into epoch ms (or NaN). Handles ISO, ISO+time, M/D/Y, long dates, Excel serials.
+function parseDate(v){
+  if(v===null||v===undefined||v==='')return NaN;
+  if(v instanceof Date)return v.getTime();
+  if(typeof v==='number'){ // Excel serial date (days since 1899-12-30) if in plausible range
+    if(v>20000&&v<80000)return Math.round((v-25569)*86400000);
+    return NaN;
+  }
+  const s=String(v).trim();
+  // Excel serial as string
+  if(/^\d{4,6}(\.\d+)?$/.test(s)){const n=+s;if(n>20000&&n<80000)return Math.round((n-25569)*86400000)}
+  // ISO date or timestamp
+  if(/^\d{4}-\d{2}-\d{2}([ T]\d{2}:\d{2}(:\d{2})?)?/.test(s)){const t=Date.parse(s);if(!isNaN(t))return t}
+  // M/D/YYYY or MM/DD/YYYY (US short date), optional time
+  let m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:[ T](\d{1,2}):(\d{2}))?/);
+  if(m){let y=+m[3];if(y<100)y+=2000;const t=new Date(y,(+m[1])-1,+m[2],+(m[4]||0),+(m[5]||0)).getTime();if(!isNaN(t))return t}
+  // Long date ("January 5, 2026", "5 Jan 2026", etc.)
+  if(/[A-Za-z]{3,}/.test(s)&&/\d{4}/.test(s)){const t=Date.parse(s);if(!isNaN(t))return t}
+  return NaN;
+}
+function isDateValue(v){return !isNaN(parseDate(v))}
+// to ISO yyyy-mm-dd for date inputs
+function toISO(epoch){if(isNaN(epoch))return '';const d=new Date(epoch);return d.toISOString().slice(0,10)}
 function dateBounds(){
-  const dates=liveRows().map(r=>r.Date).filter(Boolean).sort();
-  if(!dates.length)return {min:'',max:''};
-  return {min:dates[0],max:dates[dates.length-1]};
+  const dc=dateRange.col||'Date';
+  const eps=liveRows().map(r=>parseDate(r[dc])).filter(e=>!isNaN(e)).sort((a,b)=>a-b);
+  if(!eps.length)return {min:'',max:'',minE:NaN,maxE:NaN};
+  return {min:toISO(eps[0]),max:toISO(eps[eps.length-1]),minE:eps[0],maxE:eps[eps.length-1]};
 }
 function activeDateFrom(){
   const b=dateBounds();
   if(dateRange.preset==='all')return b.min;
   if(dateRange.preset==='custom')return dateRange.from||b.min;
-  const days={'7':7,'30':30,'month':null}[dateRange.preset];
-  const maxD=new Date(b.max);
+  if(!b.max)return '';
+  const maxD=new Date(b.maxE);
   if(dateRange.preset==='month'){return maxD.toISOString().slice(0,7)+'-01'}
-  const d=new Date(maxD);d.setDate(d.getDate()-(days-1));return d.toISOString().slice(0,10);
+  const days={'7':7,'30':30}[dateRange.preset]||30;
+  const d=new Date(b.maxE);d.setDate(d.getDate()-(days-1));return d.toISOString().slice(0,10);
 }
 function activeDateTo(){
   const b=dateBounds();
@@ -338,7 +421,11 @@ function activeDateTo(){
 function dateFiltered(){
   const from=activeDateFrom(),to=activeDateTo();
   let rows=liveRows();
-  if(from&&to)rows=rows.filter(r=>!r.Date||(r.Date>=from&&r.Date<=to));
+  const dc=dateRange.col||'Date';
+  if(from&&to&&dc){
+    const fromE=parseDate(from),toE=parseDate(to)+86399999; // include the whole 'to' day
+    rows=rows.filter(r=>{const e=parseDate(r[dc]);return isNaN(e)||(e>=fromE&&e<=toE)});
+  }
   // page-level hard filters (applied everywhere, like the date range)
   if(pageFilters.length)rows=rows.filter(r=>pageFilters.every(f=>!f.col||!f.vals||!f.vals.length||f.vals.includes(String(r[f.col]))));
   return rows;
@@ -353,6 +440,7 @@ function applyFilters(rows,filters){
 function aggregate(vals,agg){
   if(!vals.length)return 0;
   if(agg==='count')return vals.length;
+  if(agg==='unique')return new Set(vals.map(v=>String(v))).size; // distinct values, duplicates ignored
   const nums=vals.map(Number);
   if(agg==='sum')return nums.reduce((a,b)=>a+b,0);
   if(agg==='avg')return nums.reduce((a,b)=>a+b,0)/nums.length;
@@ -362,8 +450,11 @@ function aggregate(vals,agg){
 }
 function groupAgg(rows,dim,measure,agg){
   const m={};
-  rows.forEach(r=>{const k=String(r[dim]);(m[k]=m[k]||[]).push(measure==='__count__'?1:r[measure])});
-  return Object.keys(m).sort().map(k=>({key:k,val:aggregate(m[k],measure==='__count__'?'count':agg)}));
+  // For unique count we need the real column values; for plain count we use 1.
+  const useCol=(measure!=='__count__')||(agg==='unique');
+  rows.forEach(r=>{const k=String(r[dim]);(m[k]=m[k]||[]).push(useCol?r[measure]:1)});
+  const effAgg=(measure==='__count__'&&agg!=='unique')?'count':agg;
+  return Object.keys(m).sort().map(k=>({key:k,val:aggregate(m[k],effAgg)}));
 }
 function tileColors(t,n){
   // precedence: manual per-series colors override individual slots over the
@@ -402,6 +493,7 @@ function catOpacities(keys,dim){
 }
 
 function renderPlot(el,t){
+  if(t.type==='table'){return renderTable(el,t);}
   // guard: a freshly added / partially configured tile may lack required fields
   const needsDim=['bar','pie','line','stacked','box','heatmap'].includes(t.type);
   const needsX=t.type==='scatter';
@@ -423,7 +515,7 @@ function renderPlot(el,t){
     traces=[{type:'bar',x:keys,y:g.map(d=>+d.val.toFixed(1)),
       marker:{color:keys.map((k,i)=>cols[0]),opacity:op},
       text:t.showLabels?g.map(d=>(+d.val.toFixed(1)).toLocaleString()):undefined,
-      textposition:t.showLabels?'outside':'none',textfont:{size:Math.round(10*fscale)},cliponaxis:false,
+      textposition:t.showLabels?'outside':'none',textfont:{size:Math.round((t.labelSize||13)*fscale)},cliponaxis:false,
       hovertemplate:'%{x}<br>%{y}<extra></extra>',customdata:keys}];
   } else if(t.type==='pie'){
     const g=groupAgg(rows,t.dim,t.measure,t.agg);
@@ -433,21 +525,21 @@ function renderPlot(el,t){
       if(xfilter&&xfilter.col===t.dim&&k!==xfilter.val)return 'rgba(150,150,170,0.2)';
       return base[i];
     });
-    traces=[{type:'pie',labels:keys,values:g.map(d=>+d.val.toFixed(1)),hole:.62,marker:{colors:colors},textinfo:t.showLabels?'label+value':'percent',textfont:{size:Math.round(11*fscale)},hovertemplate:'%{label}<br>%{value} (%{percent})<extra></extra>',customdata:keys}];
+    traces=[{type:'pie',labels:keys,values:g.map(d=>+d.val.toFixed(1)),hole:.62,marker:{colors:colors},textinfo:t.showLabels?'label+value':'percent',textfont:{size:Math.round((t.labelSize||13)*fscale)},hovertemplate:'%{label}<br>%{value} (%{percent})<extra></extra>',customdata:keys}];
     layout.margin={l:8,r:8,t:8,b:8};
   } else if(t.type==='line'){
     const g=groupAgg(rows,t.dim,t.measure,t.agg);
-    traces=[{type:'scatter',mode:t.showLabels?'lines+markers+text':'lines',x:g.map(d=>d.key),y:g.map(d=>+d.val.toFixed(1)),line:{color:cols[0],width:2.5,shape:'spline'},fill:'tozeroy',fillcolor:'rgba(127,119,221,.12)',text:t.showLabels?g.map(d=>(+d.val.toFixed(1)).toLocaleString()):undefined,textposition:'top center',textfont:{size:Math.round(9*fscale)},hovertemplate:'%{x}<br>%{y}<extra></extra>'}];
+    traces=[{type:'scatter',mode:t.showLabels?'lines+markers+text':'lines',x:g.map(d=>d.key),y:g.map(d=>+d.val.toFixed(1)),line:{color:cols[0],width:2.5,shape:'spline'},fill:'tozeroy',fillcolor:'rgba(127,119,221,.12)',text:t.showLabels?g.map(d=>(+d.val.toFixed(1)).toLocaleString()):undefined,textposition:'top center',textfont:{size:Math.round((t.labelSize||13)*fscale)},hovertemplate:'%{x}<br>%{y}<extra></extra>'}];
   } else if(t.type==='stacked'){
     const seriesKeys=[...new Set(rows.map(r=>String(r[t.series])))].sort();
     const dimKeys=[...new Set(rows.map(r=>String(r[t.dim])))].sort();
     const op=catOpacities(dimKeys,t.dim);
     traces=seriesKeys.map((sk,i)=>{const ys=dimKeys.map(dk=>{
       const sub=rows.filter(r=>String(r[t.dim])===dk&&String(r[t.series])===sk);
-      return +aggregate(sub.map(r=>t.measure==='__count__'?1:r[t.measure]),t.measure==='__count__'?'count':t.agg).toFixed(1);
+      return +aggregate(sub.map(r=>((t.measure!=='__count__')||(t.agg==='unique'))?r[t.measure]:1),(t.measure==='__count__'&&t.agg!=='unique')?'count':t.agg).toFixed(1);
     });return {type:'bar',name:sk,x:dimKeys,y:ys,marker:{color:cols[i],opacity:op},
       text:t.showLabels?ys.map(v=>v?(+v.toFixed(1)).toLocaleString():''):undefined,
-      textposition:t.showLabels?'inside':'none',insidetextfont:{size:Math.round(9*fscale),color:'#fff'},
+      textposition:t.showLabels?'inside':'none',insidetextfont:{size:Math.round((t.labelSize||12)*fscale),color:'#fff'},
       customdata:dimKeys,hovertemplate:'%{x} · '+sk+'<br>%{y}<extra></extra>'}});
     layout.barmode='stack';layout.showlegend=true;layout.legend={orientation:'h',y:-0.22,font:{size:9}};layout.margin.b=44;
   } else if(t.type==='histogram'){
@@ -475,7 +567,7 @@ function renderPlot(el,t){
     const yk=[...new Set(rows.map(r=>String(r[t.dim])))].sort();
     const z=yk.map(y=>xk.map(x=>{
       const sub=rows.filter(r=>String(r[t.dim])===y&&String(r[t.series])===x);
-      return +aggregate(sub.map(r=>t.measure==='__count__'?1:r[t.measure]),t.measure==='__count__'?'count':t.agg).toFixed(1);
+      return +aggregate(sub.map(r=>((t.measure!=='__count__')||(t.agg==='unique'))?r[t.measure]:1),(t.measure==='__count__'&&t.agg!=='unique')?'count':t.agg).toFixed(1);
     }));
     const c=cols[0];
     traces=[{type:'heatmap',x:xk,y:yk,z:z,colorscale:[[0,'rgba(127,119,221,0.08)'],[.5,c],[1,'#c5b8f7']],showscale:true,colorbar:{thickness:8,len:.8},hovertemplate:'%{y} · %{x}<br>%{z}<extra></extra>'}];
@@ -504,11 +596,147 @@ function renderPlot(el,t){
   });
 }
 
+function defaultTableConfig(){
+  const cols=(CAT.concat(NUM)).slice(0,4);
+  return {columns:cols.map(c=>({field:c,header:c})),rowLimit:10,overrides:{},sort:null,format:{mode:'magnitude',focusValue:''}};
+}
+function renderTable(el,t){
+  if(!t.table)t.table=defaultTableConfig();
+  const cfg=t.table;
+  if(!cfg.format)cfg.format={mode:'magnitude',focusValue:''};
+  let rows=applyFilters(dateFiltered(),t.filters);
+  if(xfilter)rows=rows.filter(r=>String(r[xfilter.col])===xfilter.val);
+  const cols=cfg.columns||[];
+  // raw value for a given source row + column (pre-override)
+  const raw=(r,ci)=>{const f=cols[ci]&&cols[ci].field;return (f&&r&&r[f]!==undefined)?r[f]:''};
+  // sort the underlying rows if a sort is set
+  if(cfg.sort&&cols[cfg.sort.ci]){
+    const ci=cfg.sort.ci,dir=cfg.sort.dir;
+    rows=rows.slice().sort((a,b)=>{
+      let av=raw(a,ci),bv=raw(b,ci);
+      const an=Number(av),bn=Number(bv);
+      let cmp;
+      if(isFinite(an)&&isFinite(bn))cmp=an-bn; else cmp=String(av).localeCompare(String(bv));
+      return dir==='desc'?-cmp:cmp;
+    });
+  }
+  rows=rows.slice(0,cfg.rowLimit||10);
+  const cellVal=(ri,ci)=>{
+    const ov=cfg.overrides&&cfg.overrides[ri+':'+ci];
+    if(ov!==undefined)return ov;
+    const v=raw(rows[ri],ci);
+    return v!==undefined?String(v):'';
+  };
+  // ---- conditional formatting: precompute per-column stats ----
+  const accent=tileColors(t,1)[0];
+  const fmtMode=cfg.format.mode||'magnitude';
+  const colStats=cols.map((c,ci)=>{
+    const vals=rows.map((r,ri)=>cellVal(ri,ci));
+    const nums=vals.map(Number).filter(isFinite);
+    const counts={};vals.forEach(v=>{counts[v]=(counts[v]||0)+1});
+    return {min:nums.length?Math.min(...nums):0,max:nums.length?Math.max(...nums):0,allNum:nums.length===vals.length&&vals.length>0,counts:counts};
+  });
+  function cellStyle(ri,ci){
+    const v=cellVal(ri,ci);const st=colStats[ci];
+    if(fmtMode==='none')return '';
+    if(fmtMode==='duplicate'){
+      if(st.counts[v]>1&&v!=='')return 'background:'+hexA(accent,.22)+';font-weight:500';
+      return '';
+    }
+    if(fmtMode==='focus'){
+      const fv=String(cfg.format.focusValue||'').trim().toLowerCase();
+      if(fv&&String(v).toLowerCase().includes(fv))return 'background:'+hexA(accent,.28)+';font-weight:500';
+      return '';
+    }
+    // magnitude (default): largest→smallest gradient on numeric columns
+    if(st.allNum&&st.max!==st.min){
+      const n=Number(v);if(!isFinite(n))return '';
+      const ratio=(n-st.min)/(st.max-st.min);
+      return 'background:'+hexA(accent,0.06+ratio*0.30);
+    }
+    return '';
+  }
+  const sortIcon=ci=>{
+    if(!cfg.sort||cfg.sort.ci!==ci)return '<span class="sort-ico" style="opacity:.3">↕</span>';
+    return '<span class="sort-ico" style="color:'+accent+'">'+(cfg.sort.dir==='asc'?'↑':'↓')+'</span>';
+  };
+  let html='';
+  html+='<div class="tbl-wrap"><table class="data-tbl"><thead><tr>';
+  cols.forEach((c,ci)=>{
+    html+='<th><span class="th-sort" data-ci="'+ci+'" title="Click to sort"><span class="th-text" contenteditable="true" data-ci="'+ci+'" spellcheck="false">'+(c.header||c.field||'')+'</span> '+sortIcon(ci)+'</span><button class="th-del" data-ci="'+ci+'" title="Remove column">×</button></th>';
+  });
+  html+='<th class="th-add"><button class="col-add" title="Add column">+</button></th></tr></thead><tbody>';
+  for(let ri=0;ri<rows.length;ri++){
+    html+='<tr>';
+    cols.forEach((c,ci)=>{html+='<td style="'+cellStyle(ri,ci)+'"><span class="cell" contenteditable="true" data-ri="'+ri+'" data-ci="'+ci+'" spellcheck="false">'+cellVal(ri,ci)+'</span></td>'});
+    html+='<td class="row-act"><button class="row-del" data-ri="'+ri+'" title="Remove row">×</button></td></tr>';
+  }
+  html+='</tbody></table></div><div class="tbl-foot"><button class="tbl-btn row-add">+ Add row</button></div>';
+  el.innerHTML=html;
+  // #4: place/refresh the "Default order" reset pill in the TILE HEADER (not in the body) so it never shifts layout
+  syncTableHeaderPill(el,t);
+  // sort on header click (asc -> desc -> none)
+  el.querySelectorAll('.th-sort').forEach(s=>s.onclick=e=>{
+    if(document.activeElement&&document.activeElement.classList.contains('th-text'))return;
+    const ci=+s.dataset.ci;
+    if(!cfg.sort||cfg.sort.ci!==ci)cfg.sort={ci:ci,dir:'asc'};
+    else if(cfg.sort.dir==='asc')cfg.sort={ci:ci,dir:'desc'};
+    else cfg.sort=null;
+    renderTable(el,t);scheduleDraft();
+  });
+  // header rename (clicking into the text to edit shouldn't trigger sort; rename commits on blur)
+  el.querySelectorAll('.th-text').forEach(s=>{
+    s.onclick=ev=>ev.stopPropagation();
+    s.onblur=e=>{const ci=+e.target.dataset.ci;if(cfg.columns[ci])cfg.columns[ci].header=e.target.textContent.trim()||cfg.columns[ci].field;scheduleDraft()};
+    s.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();e.target.blur()}};
+  });
+  // cell override
+  el.querySelectorAll('.cell').forEach(s=>s.onblur=e=>{const ri=+e.target.dataset.ri,ci=+e.target.dataset.ci;cfg.overrides=cfg.overrides||{};cfg.overrides[ri+':'+ci]=e.target.textContent;scheduleDraft()});
+  el.querySelectorAll('.cell').forEach(s=>s.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();e.target.blur()}});
+  // remove column
+  el.querySelectorAll('.th-del').forEach(b=>b.onclick=ev=>{ev.stopPropagation();const ci=+b.dataset.ci;cfg.columns.splice(ci,1);if(cfg.sort&&cfg.sort.ci>=cfg.columns.length)cfg.sort=null;renderTable(el,t);scheduleDraft()});
+  // #2: add column via a small popup listing available dataset columns + a custom (empty) column option
+  el.querySelector('.col-add').onclick=ev=>{
+    ev.stopPropagation();
+    closeColAddMenu();
+    const used=cfg.columns.map(c=>c.field);
+    const avail=(CAT.concat(NUM)).filter(c=>!used.includes(c));
+    const menu=document.createElement('div');menu.className='col-add-menu';menu.id='colAddMenu';
+    let mh='<div class="cam-title">Add column</div>';
+    if(avail.length)mh+=avail.map(c=>'<div class="cam-item" data-f="'+c+'">'+c+'</div>').join('');
+    else mh+='<div class="cam-empty">All dataset columns added</div>';
+    mh+='<div class="cam-sep"></div><div class="cam-item cam-custom">+ Custom column (empty)</div>';
+    menu.innerHTML=mh;
+    const r=ev.currentTarget.getBoundingClientRect();
+    menu.style.top=(r.bottom+6)+'px';menu.style.left=Math.min(r.left,window.innerWidth-220)+'px';
+    document.body.appendChild(menu);
+    menu.querySelectorAll('.cam-item[data-f]').forEach(it=>it.onclick=()=>{cfg.columns.push({field:it.dataset.f,header:it.dataset.f});closeColAddMenu();renderTable(el,t);scheduleDraft()});
+    menu.querySelector('.cam-custom').onclick=()=>{cfg.columns.push({field:'',header:'Custom'});closeColAddMenu();renderTable(el,t);scheduleDraft()};
+    setTimeout(()=>document.addEventListener('pointerdown',_camOutside,true),0);
+  };
+  el.querySelectorAll('.row-del').forEach(b=>b.onclick=()=>{cfg.rowLimit=Math.max(0,(cfg.rowLimit||10)-1);renderTable(el,t);scheduleDraft()});
+  el.querySelector('.row-add').onclick=()=>{cfg.rowLimit=(cfg.rowLimit||10)+1;renderTable(el,t);scheduleDraft()};
+}
+function closeColAddMenu(){const m=document.getElementById('colAddMenu');if(m)m.remove();document.removeEventListener('pointerdown',_camOutside,true)}
+function _camOutside(e){const m=document.getElementById('colAddMenu');if(m&&!m.contains(e.target)&&!e.target.closest('.col-add'))closeColAddMenu()}
+// #4: render the reset-sort pill into the tile header area
+function syncTableHeaderPill(el,t){
+  const tileEl=el.closest('.tile');if(!tileEl)return;
+  const menu=tileEl.querySelector('.tile-menu');if(!menu)return;
+  let pill=menu.querySelector('.pill-reset');
+  if(t.table&&t.table.sort){
+    if(!pill){pill=document.createElement('span');pill.className='pill-reset';pill.title='Reset sort';pill.textContent='⟲ Default';menu.insertBefore(pill,menu.firstChild);}
+    pill.onclick=()=>{t.table.sort=null;renderTable(el.querySelector('.plot')||el,t);scheduleDraft()};
+  } else if(pill){pill.remove();}
+}
+// hex + alpha -> rgba string
+function hexA(hex,a){const m=(hex||'#7F77DD').replace('#','');const r=parseInt(m.slice(0,2),16),g=parseInt(m.slice(2,4),16),b=parseInt(m.slice(4,6),16);return 'rgba('+r+','+g+','+b+','+a+')';}
 function renderKpi(el,t){
   let rows=applyFilters(dateFiltered(),t.filters);
   if(xfilter)rows=rows.filter(r=>String(r[xfilter.col])===xfilter.val);
-  const vals=rows.map(r=>t.measure==='__count__'?1:r[t.measure]);
-  let v=aggregate(vals,t.agg);
+  const useCol=(t.measure!=='__count__')||(t.agg==='unique');
+  const vals=rows.map(r=>useCol?r[t.measure]:1);
+  let v=aggregate(vals,(t.measure==='__count__'&&t.agg!=='unique')?'count':t.agg);
   const fmt=n=>t.agg==='count'?(+n).toLocaleString():(+(+n).toFixed(1)).toLocaleString();
   const disp=fmt(v);
   if(t._delta===undefined)t._delta=(Math.random()*30-8);
@@ -572,6 +800,7 @@ function tileTotal(t){
     const fmt=n=>{n=+n;return (Math.abs(n)>=1000?Math.round(n).toLocaleString():(+n.toFixed(1)).toLocaleString())};
     if(['bar','pie','line','stacked'].includes(t.type)){
       const measure=t.measure;
+      if(t.agg==='unique'&&measure!=='__count__'){return 'Unique: '+fmt(new Set(rows.map(r=>String(r[measure]))).size)}
       if(measure==='__count__'||t.agg==='count')return 'Total: '+fmt(rows.length);
       const vals=rows.map(r=>+r[measure]).filter(v=>isFinite(v));
       if(!vals.length)return '';
@@ -703,21 +932,34 @@ function startLift(el,t,sx,sy){
 }
 
 function attachResize(el,t){
-  const h=el.querySelector('.resize-h');let sx,sy,sw,sh;
+  const h=el.querySelector('.resize-h');let sx,sy,sw,sh,raf=0,lastW,lastH;
   h.addEventListener('pointerdown',e=>{
     e.preventDefault();e.stopPropagation();
-    sx=e.clientX;sy=e.clientY;sw=t.w;sh=t.h;
+    sx=e.clientX;sy=e.clientY;sw=t.w;sh=t.h;lastW=t.w;lastH=t.h;
     el.classList.add('resizing');document.getElementById('canvas').classList.add('dragging');
     const colW=el.parentElement.clientWidth/12;
     function mv(ev){
       const sc=window.scrollY;
-      t.w=Math.max(2,Math.min(12,Math.round(sw+(ev.clientX-sx)/colW)));
-      t.h=Math.max(2,Math.round(sh+(ev.clientY-sy)/78));
-      el.style.gridColumn='span '+t.w;el.style.gridRow='span '+t.h;
-      const p=el.querySelector('.plot');if(p)Plotly.Plots.resize(p);
+      const nw=Math.max(2,Math.min(12,Math.round(sw+(ev.clientX-sx)/colW)));
+      const nh=Math.max(2,Math.round(sh+(ev.clientY-sy)/78));
+      if(nw!==lastW||nh!==lastH){
+        lastW=nw;lastH=nh;t.w=nw;t.h=nh;
+        // CSS transitions the span change, so each step glides instead of snapping
+        el.style.gridColumn='span '+t.w;el.style.gridRow='span '+t.h;
+        // throttle Plotly resize to one per frame for a fluid feel
+        if(!raf)raf=requestAnimationFrame(()=>{raf=0;const p=el.querySelector('.plot');if(p&&t.type!=='table')Plotly.Plots.resize(p)});
+      }
       if(window.scrollY!==sc)window.scrollTo(0,sc);
     }
-    function up(){el.classList.remove('resizing');document.getElementById('canvas').classList.remove('dragging');document.removeEventListener('pointermove',mv);document.removeEventListener('pointerup',up);const p=el.querySelector('.plot');if(p)Plotly.Plots.resize(p)}
+    function up(){
+      el.classList.remove('resizing');document.getElementById('canvas').classList.remove('dragging');
+      document.removeEventListener('pointermove',mv);document.removeEventListener('pointerup',up);
+      if(raf){cancelAnimationFrame(raf);raf=0}
+      // final smooth settle once the grid transition finishes
+      const p=el.querySelector('.plot');
+      if(p&&t.type!=='table'){Plotly.Plots.resize(p);setTimeout(()=>Plotly.Plots.resize(p),400)}
+      scheduleDraft&&scheduleDraft();
+    }
     document.addEventListener('pointermove',mv);document.addEventListener('pointerup',up,{once:true});
   });
 }
@@ -739,8 +981,8 @@ function buildDrawer(){
   b.innerHTML=h;
   document.getElementById('f_type').onchange=e=>{draft.type=e.target.value;normalizeDraft();document.getElementById('adaptive').innerHTML=adaptiveFields(draft);bindAdaptive();renderTileScheme();renderSeriesColors()};
   document.getElementById('f_title').oninput=e=>draft.title=e.target.value;
-  document.getElementById('f_w').oninput=e=>draft.w=+e.target.value;
-  document.getElementById('f_h').oninput=e=>draft.h=+e.target.value;
+  document.getElementById('f_w').oninput=e=>{draft.w=+e.target.value;draft._sizeEdited=true};
+  document.getElementById('f_h').oninput=e=>{draft.h=+e.target.value;draft._sizeEdited=true};
   const _af=document.getElementById('addFilter');if(_af)_af.onclick=()=>{draft.filters.push({col:(CAT[0]||COLS[0]||''),vals:[]});renderFilters()};
   bindAdaptive();renderTileScheme();renderSeriesColors();
   const _ms=document.getElementById('moreSettingsBtn');if(_ms)_ms.onclick=toggleMoreSettings;
@@ -756,6 +998,7 @@ function toggleMoreSettings(){
   if(t.type!=='kpi'){
     // Data labels toggle (all chart types)
     h+='<div class="checkbox-row'+(t.showLabels?' on':'')+'" id="ms_labels"><span class="checkbox-box"><svg class="ico" style="width:13px;height:13px;stroke:#fff" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></span>Show data labels</div>';
+    h+='<div id="ms_labelsize" style="display:'+(t.showLabels?'block':'none')+';margin:6px 0 4px 30px"><label style="text-transform:none;letter-spacing:0;color:var(--text3);font-size:11px;display:block;margin-bottom:6px">Value label size</label><div style="display:flex;align-items:center;gap:10px"><input type="range" id="ms_lsize" min="9" max="32" step="1" value="'+(t.labelSize||(t.type==='stacked'?12:13))+'" style="flex:1"><span id="ms_lsizeout" style="font-size:12px;color:var(--text2);min-width:38px;text-align:right">'+(t.labelSize||(t.type==='stacked'?12:13))+'px</span></div></div>';
     // Totals checkbox — ONLY for bar/pie (visual graphs)
     if(isBarPie){
       h+='<div class="checkbox-row'+(t.showTotal?' on':'')+'" id="ms_total"><span class="checkbox-box"><svg class="ico" style="width:13px;height:13px;stroke:#fff" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></span>Show total number in header</div>';
@@ -769,7 +1012,8 @@ function toggleMoreSettings(){
   p.innerHTML=h;
   document.getElementById('drawer').appendChild(p);
   // bind
-  const lb=document.getElementById('ms_labels');if(lb)lb.onclick=()=>{draft.showLabels=!draft.showLabels;lb.classList.toggle('on',draft.showLabels)};
+  const lb=document.getElementById('ms_labels');if(lb)lb.onclick=()=>{draft.showLabels=!draft.showLabels;lb.classList.toggle('on',draft.showLabels);const w=document.getElementById('ms_labelsize');if(w)w.style.display=draft.showLabels?'block':'none'};
+  const ls=document.getElementById('ms_lsize');if(ls)ls.oninput=e=>{draft.labelSize=+e.target.value;const o=document.getElementById('ms_lsizeout');if(o)o.textContent=e.target.value+'px'};
   const tt=document.getElementById('ms_total');if(tt)tt.onclick=()=>{draft.showTotal=!draft.showTotal;tt.classList.toggle('on',draft.showTotal);const w=document.getElementById('ms_totalsize');if(w)w.style.display=draft.showTotal?'block':'none'};
   const ts=document.getElementById('ms_tsize');if(ts)ts.oninput=e=>{draft.totalSize=+e.target.value;const o=document.getElementById('ms_tsizeout');if(o)o.textContent=e.target.value+'px'};
   const af=document.getElementById('addFilter');if(af)af.onclick=()=>{draft.filters.push({col:(CAT[0]||COLS[0]||''),vals:[]});renderFilters()};
@@ -832,6 +1076,7 @@ function normalizeDraft(){
   if(t.type==='scatter'){if(!NUM.includes(t.measure))t.measure=num1;if(!NUM.includes(t.xmeasure))t.xmeasure=num0}
   if(t.type==='histogram'&&!NUM.includes(t.measure))t.measure=num0;
   if(t.type==='box'&&!NUM.includes(t.measure))t.measure=num0;
+  if(t.type==='table'&&!t.table)t.table=defaultTableConfig();
   if(t.sankeyCols)t.sankeyCols=t.sankeyCols.map(c=>CAT.includes(c)?c:'').filter(Boolean);
   if(!t.sankeyCols||!t.sankeyCols.length)t.sankeyCols=defaults.sankeyCols;
 }
@@ -839,7 +1084,7 @@ function adaptiveFields(t){
   const measOpts=['__count__'].concat(NUM);
   const measLabel=v=>v==='__count__'?'Count of rows':v;
   const measSelect=(id,sel,onlyNum)=>{const list=onlyNum?NUM:measOpts;return '<select id="'+id+'">'+list.map(o=>'<option value="'+o+'"'+(o===sel?' selected':'')+'>'+measLabel(o)+'</option>').join('')+'</select>'};
-  const aggField='<div class="field"><label>Aggregation</label><select id="f_agg">'+opt(['count','sum','avg','min','max'],t.agg)+'</select></div>';
+  const aggField='<div class="field"><label>Aggregation</label><select id="f_agg">'+opt(['count','unique','sum','avg','min','max'],t.agg)+'</select></div>';
   let h='';
   if(t.type==='kpi'){h+='<div class="field"><label>Measure</label>'+measSelect('f_measure',t.measure)+'</div>'+aggField;
     h+='<div class="field"><label>Breakdown dimension (optional)</label><select id="f_kpidim"><option value="">None — single number</option>'+opt(CAT.filter(c=>c!=='Date'),t.dim||'')+'</select></div>';
@@ -851,6 +1096,16 @@ function adaptiveFields(t){
   else if(t.type==='box'){h+='<div class="field"><label>Group by</label><select id="f_dim">'+opt(CAT.filter(c=>c!=='Date'),t.dim)+'</select></div><div class="field"><label>Value (measure)</label>'+measSelect('f_measure',t.measure,true)+'</div>'}
   else if(t.type==='scatter'){h+='<div class="field"><label>X measure</label>'+measSelect('f_xmeasure',t.xmeasure,true)+'</div><div class="field"><label>Y measure</label>'+measSelect('f_measure',t.measure,true)+'</div><div class="field"><label>Color by</label><select id="f_color"><option value="">None</option>'+opt(CAT.filter(c=>c!=='Date'),t.color)+'</select></div>'}
   else if(t.type==='sankey'){h+='<div class="field"><label>Flow stages (in order)</label>';[0,1,2].forEach(i=>{h+='<div style="margin-bottom:8px"><select id="f_sankey'+i+'"><option value="">—</option>'+opt(CAT.filter(c=>c!=='Date'),t.sankeyCols[i]||'')+'</select></div>'});h+='</div>'}
+  else if(t.type==='table'){
+    if(!t.table)t.table=defaultTableConfig();
+    if(!t.table.format)t.table.format={mode:'magnitude',focusValue:''};
+    const fm=t.table.format.mode||'magnitude';
+    h+='<div class="field"><label>Rows to show</label><input type="number" id="f_rowlimit" min="1" max="200" value="'+(t.table.rowLimit||10)+'"></div>';
+    h+='<div class="field"><label>Columns</label><div style="font-size:11px;color:var(--text3);margin-bottom:6px">Add/remove columns and rename headers on the table directly. Add one here too:</div><select id="f_tblcol"><option value="">+ Add a column…</option>'+opt((CAT.concat(NUM)).filter(c=>!t.table.columns.map(x=>x.field).includes(c)),'')+'</select></div>';
+    h+='<div class="field"><label>Conditional formatting</label><select id="f_fmtmode"><option value="magnitude"'+(fm==='magnitude'?' selected':'')+'>Magnitude (largest → smallest)</option><option value="duplicate"'+(fm==='duplicate'?' selected':'')+'>Highlight duplicates</option><option value="focus"'+(fm==='focus'?' selected':'')+'>Highlight a focus value</option><option value="none"'+(fm==='none'?' selected':'')+'>None</option></select>';
+    h+='<div id="f_focuswrap" style="display:'+(fm==='focus'?'block':'none')+';margin-top:8px"><input type="text" id="f_focusval" placeholder="Value to find/highlight" value="'+String(t.table.format.focusValue||'').replace(/"/g,'&quot;')+'"></div>';
+    h+='<div style="font-size:11px;color:var(--text3);margin-top:6px">Uses the tile accent color. Click a header to sort: asc → desc → reset pill.</div></div>';
+  }
   return h;
 }
 function bindAdaptive(){
@@ -869,6 +1124,10 @@ function bindAdaptive(){
   if(g('totalSeg'))g('totalSeg').querySelectorAll('button').forEach(b=>b.onclick=()=>{draft.showTotal=b.dataset.v==='1';g('totalSeg').querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on');const w=g('totalSizeWrap');if(w)w.style.display=draft.showTotal?'block':'none'});
   if(g('f_totalsize'))g('f_totalsize').oninput=e=>{draft.totalSize=+e.target.value;const o=g('totalsizeOut');if(o)o.textContent=e.target.value+'px'};
   [0,1,2].forEach(i=>{if(g('f_sankey'+i))g('f_sankey'+i).onchange=e=>{draft.sankeyCols[i]=e.target.value}});
+  if(g('f_rowlimit'))g('f_rowlimit').oninput=e=>{if(!draft.table)draft.table=defaultTableConfig();draft.table.rowLimit=Math.max(1,+e.target.value||10)};
+  if(g('f_tblcol'))g('f_tblcol').onchange=e=>{const v=e.target.value;if(!v)return;if(!draft.table)draft.table=defaultTableConfig();if(!draft.table.columns.map(x=>x.field).includes(v))draft.table.columns.push({field:v,header:v});e.target.value=''};
+  if(g('f_fmtmode'))g('f_fmtmode').onchange=e=>{if(!draft.table)draft.table=defaultTableConfig();if(!draft.table.format)draft.table.format={};draft.table.format.mode=e.target.value;const w=g('f_focuswrap');if(w)w.style.display=e.target.value==='focus'?'block':'none'};
+  if(g('f_focusval'))g('f_focusval').oninput=e=>{if(!draft.table)draft.table=defaultTableConfig();if(!draft.table.format)draft.table.format={};draft.table.format.focusValue=e.target.value};
 }
 function renderFilters(){
   const list=document.getElementById('filterList');if(!list)return;list.innerHTML='';
@@ -884,19 +1143,23 @@ function renderFilters(){
 }
 function applyDraft(){
   const i=tiles.findIndex(t=>t.id===editingId);
-  if(i>=0)tiles[i]=JSON.parse(JSON.stringify(draft));
+  if(i<0){closeDrawer();return}
+  // Preserve the tile's CURRENT live size (e.g. from a manual resize) unless the user
+  // explicitly changed the width/height fields in this drawer session.
+  const live=tiles[i];
+  if(!draft._sizeEdited){draft.w=live.w;draft.h=live.h;}
+  delete draft._sizeEdited;
+  tiles[i]=JSON.parse(JSON.stringify(draft));
   const t=tiles[i];
   const el=document.querySelector('.tile[data-id="'+t.id+'"]');
   closeDrawer();
-  // size change requires grid span update; everything else re-renders in place
   if(el){
     el.style.gridColumn='span '+t.w;el.style.gridRow='span '+t.h;
-    // title + sub
     const titleEl=el.querySelector('.tile-title');if(titleEl)titleEl.textContent=t.title;
     const subEl=el.querySelector('.tile-sub');
     if(subEl)subEl.innerHTML=(t.type==='kpi'?'':tileSubHTML(t));
     if(t.type==='kpi'){const kb=el.querySelector('.kpibody');if(kb)renderKpi(kb,t);}
-    else {const pl=el.querySelector('.plot');if(pl){renderPlot(pl,t);Plotly.Plots.resize(pl);}}
+    else {const pl=el.querySelector('.plot');if(pl){renderPlot(pl,t);if(t.type!=='table')Plotly.Plots.resize(pl);}}
   } else { render(); }
   scheduleDraft();
 }
@@ -1010,9 +1273,18 @@ const DATE_PRESETS=[['30','Last 30 days'],['7','Last 7 days'],['month','This mon
 document.getElementById('dateBtn').onclick=()=>{
   const b=dateBounds();
   let h='<div style="width:248px">';
+  // date-column picker (only detected date-like columns)
+  if(DATECOLS.length){
+    h+='<div style="font-size:11px;color:var(--text3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">Date column</div>';
+    h+='<select id="d_col" style="font-size:12.5px;padding:8px 10px;margin-bottom:12px">'+DATECOLS.map(c=>'<option value="'+c+'"'+(c===dateRange.col?' selected':'')+'>'+c+'</option>').join('')+'</select>';
+  } else {
+    h+='<div style="font-size:11px;color:var(--text3);margin-bottom:10px">No date column detected in this dataset.</div>';
+  }
   DATE_PRESETS.forEach(([v,l])=>{h+='<button class="preset'+(dateRange.preset===v?' on':'')+'" data-v="'+v+'">'+l+'</button>'});
   h+='<div style="border-top:0.5px solid var(--border);margin-top:10px;padding-top:12px"><div style="font-size:11px;color:var(--text3);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">Custom range</div><div style="display:flex;flex-direction:column;gap:8px"><div style="display:flex;align-items:center;gap:8px"><span style="font-size:11px;color:var(--text3);width:30px;flex:none">From</span><input type="date" id="d_from" value="'+(dateRange.from||b.min)+'" min="'+b.min+'" max="'+b.max+'" style="font-size:12.5px;padding:8px 10px;flex:1;min-width:0"></div><div style="display:flex;align-items:center;gap:8px"><span style="font-size:11px;color:var(--text3);width:30px;flex:none">To</span><input type="date" id="d_to" value="'+(dateRange.to||b.max)+'" min="'+b.min+'" max="'+b.max+'" style="font-size:12.5px;padding:8px 10px;flex:1;min-width:0"></div></div><button class="btn btn-primary" id="d_apply" style="width:100%;justify-content:center;margin-top:10px;font-size:12.5px">Apply custom</button></div></div>';
   showPop(document.getElementById('dateBtn'),h,p=>{
+    const dc=p.querySelector('#d_col');
+    if(dc)dc.onchange=e=>{dateRange.col=e.target.value;const nb=dateBounds();const fEl=p.querySelector('#d_from'),tEl=p.querySelector('#d_to');if(fEl){fEl.min=nb.min;fEl.max=nb.max;fEl.value=dateRange.from||nb.min}if(tEl){tEl.min=nb.min;tEl.max=nb.max;tEl.value=dateRange.to||nb.max}setDateLabel();refreshAll()};
     p.querySelectorAll('.preset').forEach(btn=>btn.onclick=()=>{dateRange.preset=btn.dataset.v;setDateLabel();closePop();refreshAll()});
     p.querySelector('#d_apply').onclick=()=>{dateRange.preset='custom';dateRange.from=p.querySelector('#d_from').value;dateRange.to=p.querySelector('#d_to').value;setDateLabel();closePop();refreshAll()};
   });
@@ -1042,17 +1314,33 @@ function openColors(anchor){
   h+='<div style="display:flex;align-items:center;gap:10px"><input type="color" id="accentColor" value="'+tv(cur("accent"))+'"><span style="font-size:12.5px;color:var(--text2)">Accent</span></div>';
   h+='</div></div>';
   showPop(anchor,h,p=>{
-    p.querySelectorAll('.scheme-row').forEach(r=>r.onclick=()=>{
-      globalScheme=r.dataset.name;PALETTE=schemeByName(globalScheme).slice();pickIdx=0;
-      refreshAll();openColors(document.getElementById('moreBtn'));
-    });
-    p.querySelectorAll('.swatch').forEach(s=>s.onclick=()=>{pickIdx=+s.dataset.i;p.querySelectorAll('.swatch').forEach(x=>x.classList.remove('sel'));s.classList.add('sel');p.querySelector('#pickColor').value=PALETTE[pickIdx];p.querySelector('.color-input-row span').textContent='Editing swatch '+(pickIdx+1)});
-    p.querySelector('#pickColor').oninput=e=>{PALETTE[pickIdx]=e.target.value;globalScheme='__custom__';p.querySelector('.swatch[data-i="'+pickIdx+'"]').style.background=e.target.value;refreshAll()};
-    p.querySelector('#resetPalette').onclick=()=>{globalScheme='Apple Pastels';PALETTE=schemeByName('Apple Pastels').slice();pickIdx=0;refreshAll();openColors(document.getElementById('moreBtn'))};
+    function bindSchemeRows(){
+      p.querySelectorAll('.scheme-row').forEach(r=>r.onclick=()=>{
+        globalScheme=r.dataset.name;PALETTE=schemeByName(globalScheme).slice();pickIdx=0;
+        refreshAll();refreshSchemeUI(p);
+      });
+    }
+    function bindSwatches(){
+      p.querySelectorAll('.swatch').forEach(s=>s.onclick=()=>{pickIdx=+s.dataset.i;p.querySelectorAll('.swatch').forEach(x=>x.classList.remove('sel'));s.classList.add('sel');p.querySelector('#pickColor').value=PALETTE[pickIdx];p.querySelector('.color-input-row span').textContent='Editing swatch '+(pickIdx+1)});
+    }
+    // re-render scheme rows + swatch row in place, keeping the popover node stationary
+    window.refreshSchemeUI=function(pp){
+      const list=pp.querySelector('#schemeList');
+      if(list)list.innerHTML=schemeRows((globalScheme==='__custom__')?null:globalScheme);
+      const sr=pp.querySelector('#swatchRow');
+      if(sr)sr.innerHTML=PALETTE.map((c,i)=>'<div class="swatch'+(i===pickIdx?' sel':'')+'" data-i="'+i+'" style="background:'+c+'"></div>').join('');
+      const pc=pp.querySelector('#pickColor');if(pc)pc.value=PALETTE[pickIdx];
+      const sp=pp.querySelector('.color-input-row span');if(sp)sp.textContent='Editing swatch '+(pickIdx+1);
+      bindSchemeRows();bindSwatches();
+    };
+    bindSchemeRows();
+    bindSwatches();
+    p.querySelector('#pickColor').oninput=e=>{PALETTE[pickIdx]=e.target.value;globalScheme='__custom__';const sw=p.querySelector('.swatch[data-i="'+pickIdx+'"]');if(sw)sw.style.background=e.target.value;refreshAll()};
+    p.querySelector('#resetPalette').onclick=()=>{globalScheme='Apple Pastels';PALETTE=schemeByName('Apple Pastels').slice();pickIdx=0;refreshAll();refreshSchemeUI(p)};
     const bgc=p.querySelector('#bgColor');if(bgc)bgc.oninput=e=>{themeOverride.bg=e.target.value;applyThemeOverride();refreshAll()};
     const cc=p.querySelector('#cardColor');if(cc)cc.oninput=e=>{themeOverride.card=e.target.value;applyThemeOverride();refreshAll()};
     const ac=p.querySelector('#accentColor');if(ac)ac.oninput=e=>{themeOverride.accent=e.target.value;applyThemeOverride()};
-    const rt=p.querySelector('#resetTheme');if(rt)rt.onclick=()=>{themeOverride={};applyThemeOverride();refreshAll();openColors(document.getElementById('moreBtn'))};
+    const rt=p.querySelector('#resetTheme');if(rt)rt.onclick=()=>{themeOverride={};applyThemeOverride();refreshAll();const bg=p.querySelector('#bgColor'),c2=p.querySelector('#cardColor'),a2=p.querySelector('#accentColor');if(bg)bg.value=tv(cur('bg'));if(c2)c2.value=tv(cur('card'));if(a2)a2.value=tv(cur('accent'))};
   });
 };
 
@@ -1082,7 +1370,8 @@ function getState(){
     dateRange:dateRange,
     fscale:fscale,
     datasetId:activeDatasetId,
-    theme:theme
+    theme:theme,
+    ownerName:ownerName()
   };
 }
 function applyState(s){
@@ -1108,20 +1397,25 @@ async function switchDatasetThenRender(id){
 }
 
 // Save sends a POST as application/json (matches the flow's JSON body validation).
-async function saveDashboard(isShared){
-  const name=getState().name;
-  if(!currentDashId)currentDashId='d'+Date.now()+Math.random().toString(36).slice(2,6);
+async function saveDashboard(isShared,kind){
+  // kind: 'draft' (auto), 'private' (explicit save), 'shared' (publish)
+  kind=kind||(isShared?'shared':'private');
+  const state=getState();state.kind=kind;
+  const name=state.name;
+  // drafts reuse one rolling id per browser so only the LATEST auto-save persists (overwrite)
+  if(kind==='draft'){ currentDashId=currentDashId||('draft-'+ownerId()); }
+  else if(!currentDashId){ currentDashId='d'+Date.now()+Math.random().toString(36).slice(2,6); }
   const body={
     id:currentDashId,name:name,ownerId:ownerId(),
     isShared:isShared?'true':'false',
-    configJSON:JSON.stringify(getState()),
+    configJSON:JSON.stringify(state),
     updatedAt:new Date().toISOString()
   };
   if(body.configJSON.length>30000){setStatus('err','Config is large ('+body.configJSON.length+' chars). Approaching the Excel cell limit — consider fewer tiles.');}
   try{
     const res=await fetch(SAVE_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     if(!res.ok)throw new Error('HTTP '+res.status);
-    toast((isShared?'Published':'Saved')+' “'+name+'”',(isShared?'load':'save'));setStatus('ok',(isShared?'Published':'Saved')+' “'+name+'” · '+new Date().toLocaleTimeString());
+    if(kind!=='draft'){toast((isShared?'Published':'Saved')+' “'+name+'”',(isShared?'load':'save'));setStatus('ok',(isShared?'Published':'Saved')+' “'+name+'” · '+new Date().toLocaleTimeString());}
     return true;
   }catch(err){
     let m=String(err.message||err);
@@ -1132,9 +1426,13 @@ async function saveDashboard(isShared){
 
 // Debounced auto-draft: saves the working state (personal, not shared) after edits.
 let draftTimer=null;
+function snapshotLocal(){
+  try{localStorage.setItem('insight_live_snapshot',JSON.stringify(getState()))}catch(e){}
+}
 function scheduleDraft(){
+  snapshotLocal(); // persist current on-screen state immediately so hard refresh restores it
   clearTimeout(draftTimer);
-  draftTimer=setTimeout(()=>{ if(currentDashId||tiles.length){saveDashboard(false)} },2500);
+  draftTimer=setTimeout(()=>{ if(tiles.length){saveDashboard(false,'draft')} },2500);
 }
 
 async function listDashboards(){
@@ -1156,8 +1454,8 @@ document.getElementById('saveBtn').onclick=()=>{
   h+='<div style="font-size:11px;color:var(--text3);margin-top:10px">Saving stores only the layout, filters, and visual settings — not the data itself.</div></div>';
   showPop(document.getElementById('saveBtn'),h,p=>{
     p.querySelector('#sv_name').oninput=e=>setOwnerName(e.target.value.trim());
-    p.querySelector('#sv_save').onclick=async()=>{closePop();await saveDashboard(false)};
-    p.querySelector('#sv_publish').onclick=async()=>{closePop();await saveDashboard(true)};
+    p.querySelector('#sv_save').onclick=async()=>{closePop();currentDashId=null;await saveDashboard(false,'private')};
+    p.querySelector('#sv_publish').onclick=async()=>{closePop();currentDashId=null;await saveDashboard(true,'shared')};
   });
 };
 
@@ -1166,22 +1464,34 @@ async function openGallery(anchor){
     try{
       const rows=await listDashboards();
       const me=ownerId();
-      // Excel/PA may return fields with different casing (ownerID vs ownerId, True vs true).
-      // Read every field case-insensitively.
       const F=(r,key)=>{const k=Object.keys(r).find(x=>x.toLowerCase()===key.toLowerCase());return k?r[k]:undefined;};
       const isSharedTrue=r=>String(F(r,'isShared')).toLowerCase()==='true';
       const ownerOf=r=>String(F(r,'ownerId'));
-      const mine=rows.filter(r=>ownerOf(r)===me);
-      const shared=rows.filter(r=>isSharedTrue(r)&&ownerOf(r)!==me);
-      function card(r){
+      const cfgOf=r=>{try{return JSON.parse(F(r,'configJSON')||'{}')}catch(e){return {}}};
+      const kindOf=r=>{const c=cfgOf(r);return c.kind||(isSharedTrue(r)?'shared':'private')};
+      const tsOf=r=>{const d=F(r,'updatedAt');return d?Date.parse(d)||0:0};
+      const idOf=r=>String(F(r,'id')||F(r,'ItemInternalId')||'');
+      // dedupe helper: keep newest row per id
+      const dedupeById=arr=>{const m={};arr.forEach(r=>{const id=idOf(r);if(!m[id]||tsOf(r)>tsOf(m[id]))m[id]=r});return Object.values(m).sort((a,b)=>tsOf(b)-tsOf(a))};
+      // 1) latest auto-saved draft (mine only) — single newest
+      const myDrafts=rows.filter(r=>ownerOf(r)===me&&kindOf(r)==='draft').sort((a,b)=>tsOf(b)-tsOf(a));
+      const latestDraft=myDrafts.length?myDrafts[0]:null;
+      // 2) my hard-saved private dashboards (named, deduped)
+      const myPrivate=dedupeById(rows.filter(r=>ownerOf(r)===me&&kindOf(r)==='private'));
+      // 3) shared dashboards (anyone, named, deduped)
+      const shared=dedupeById(rows.filter(r=>isSharedTrue(r)||kindOf(r)==='shared'));
+      function card(r,tag){
         const when=F(r,'updatedAt')?new Date(F(r,'updatedAt')).toLocaleString():'';
-        return '<div class="scheme-row gal-open" data-cfg="'+encodeURIComponent(F(r,'configJSON')||'{}')+'" data-id="'+(F(r,'id')||F(r,'ItemInternalId')||'')+'" style="flex-direction:column;align-items:stretch;gap:2px"><div style="display:flex;justify-content:space-between"><span style="font-size:12.5px;color:var(--text);font-weight:500">'+(F(r,'name')||'Untitled')+'</span><span style="font-size:10px;color:var(--text3)">'+(isSharedTrue(r)?'shared':'private')+'</span></div><span style="font-size:10px;color:var(--text3)">'+when+'</span></div>';
+        const who=ownerOf(r)===me?'you':(cfgOf(r).ownerName||ownerOf(r));
+        return '<div class="scheme-row gal-open" data-cfg="'+encodeURIComponent(F(r,'configJSON')||'{}')+'" data-id="'+idOf(r)+'" style="flex-direction:column;align-items:stretch;gap:2px"><div style="display:flex;justify-content:space-between"><span style="font-size:12.5px;color:var(--text);font-weight:500">'+(F(r,'name')||'Untitled')+'</span><span style="font-size:10px;color:var(--text3)">'+tag+'</span></div><span style="font-size:10px;color:var(--text3)">'+when+(tag==='shared'?' · by '+who:'')+'</span></div>';
       }
       let h='';
-      h+='<div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">My dashboards</div>';
-      h+='<div class="scheme-list">'+(mine.length?mine.map(card).join(''):'<div style="font-size:12px;color:var(--text3);padding:6px 0">None yet — Save one.</div>')+'</div>';
-      h+='<div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 6px;border-top:0.5px solid var(--border);padding-top:12px">Shared by others</div>';
-      h+='<div class="scheme-list">'+(shared.length?shared.map(card).join(''):'<div style="font-size:12px;color:var(--text3);padding:6px 0">No shared dashboards yet.</div>')+'</div>';
+      h+='<div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Last auto-saved</div>';
+      h+='<div class="scheme-list">'+(latestDraft?card(latestDraft,'auto-saved'):'<div style="font-size:12px;color:var(--text3);padding:6px 0">No auto-save yet.</div>')+'</div>';
+      h+='<div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 6px;border-top:0.5px solid var(--border);padding-top:12px">Saved (private)</div>';
+      h+='<div class="scheme-list">'+(myPrivate.length?myPrivate.map(r=>card(r,'private')).join(''):'<div style="font-size:12px;color:var(--text3);padding:6px 0">None yet — use Save.</div>')+'</div>';
+      h+='<div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 6px;border-top:0.5px solid var(--border);padding-top:12px">Shared</div>';
+      h+='<div class="scheme-list">'+(shared.length?shared.map(r=>card(r,'shared')).join(''):'<div style="font-size:12px;color:var(--text3);padding:6px 0">No shared dashboards yet.</div>')+'</div>';
       p.querySelector('#gal_body').innerHTML=h;
       p.querySelectorAll('.gal-open').forEach(c=>c.onclick=()=>{
         try{const cfg=JSON.parse(decodeURIComponent(c.dataset.cfg));currentDashId=c.dataset.id;closePop();applyState(cfg);toast('Loaded “'+(cfg.name||'dashboard')+'”','load');setStatus('ok','Opened “'+(cfg.name||'dashboard')+'”')}
@@ -1208,51 +1518,75 @@ function toast(msg,kind){
   host.appendChild(t);
   setTimeout(()=>{t.style.transition='opacity .4s,transform .4s';t.style.opacity='0';t.style.transform='translateY(10px)';setTimeout(()=>t.remove(),400)},3000);
 }
-let _statusTimer=null;
+let _statusEl=null,_statusTimer=null;
+// status now appears as a top-center popup (reuses the toast host)
 function setStatus(kind,msg,timeoutMs){
-  const el=document.getElementById('dsStatus');
+  const host=document.getElementById('toastHost');if(!host)return;
   if(_statusTimer){clearTimeout(_statusTimer);_statusTimer=null}
-  if(!msg){el.style.display='none';return}
-  const styles={
-    info:['var(--card2)','var(--border)','var(--text2)'],
-    ok:['rgba(93,202,165,.14)','rgba(93,202,165,.4)','#5DCAA5'],
-    err:['rgba(224,130,125,.14)','rgba(224,130,125,.4)','#e0827d'],
-    load:['var(--card2)','var(--border)','var(--text2)']
-  };
-  const [bg,bd,fg]=styles[kind]||styles.info;
+  if(_statusEl){_statusEl.remove();_statusEl=null}
+  if(!msg)return;
+  const fg=kind==='ok'?'#5DCAA5':kind==='err'?'#e0827d':'#7F77DD';
   const ico=kind==='ok'?'<path d="M20 6L9 17l-5-5"/>':kind==='err'?'<circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>':'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>';
-  el.style.cssText='display:flex;align-items:center;gap:8px;font-size:12px;padding:8px 13px;border-radius:10px;margin-top:6px;background:'+bg+';border:0.5px solid '+bd+';color:'+fg;
-  el.innerHTML='<svg class="ico" style="width:14px;height:14px;stroke:'+fg+'" viewBox="0 0 24 24">'+ico+'</svg><span>'+msg+'</span>';
-  const ms=timeoutMs!==undefined?timeoutMs:(kind==='err'?0:4000);
-  if(ms>0)_statusTimer=setTimeout(()=>{el.style.opacity='0';el.style.transition='opacity .4s';setTimeout(()=>{el.style.display='none';el.style.opacity='1'},400)},ms);
+  const t=document.createElement('div');t.className='toast';
+  t.innerHTML='<svg class="ico" style="width:16px;height:16px;stroke:'+fg+'" viewBox="0 0 24 24">'+ico+'</svg><span>'+msg+'</span>';
+  host.appendChild(t);_statusEl=t;
+  const ms=timeoutMs!==undefined?timeoutMs:(kind==='err'?6000:3500);
+  if(ms>0)_statusTimer=setTimeout(()=>{if(_statusEl===t){t.style.transition='opacity .4s,transform .4s';t.style.opacity='0';t.style.transform='translateY(-10px)';setTimeout(()=>{t.remove();if(_statusEl===t)_statusEl=null},400)}},ms);
 }
 function setDatasetLabel(){document.getElementById('datasetLabel').textContent=activeDS().name.replace(/\s*\(.*\)$/,'')}
 function spinRefresh(on){const i=document.getElementById('refreshIco');i.style.transition=on?'none':'transform .3s';i.style.animation=on?'spin 1s linear infinite':'none'}
 
+const DATA_CACHE_TTL=10*60*1000; // 10 min: serve cached rows instantly, revalidate in background
+function cacheKey(id){return 'insight_data_cache_'+id}
+function readDataCache(id){try{const r=localStorage.getItem(cacheKey(id));if(!r)return null;const o=JSON.parse(r);if(!o||!Array.isArray(o.rows))return null;return o}catch(e){return null}}
+function writeDataCache(id,rows){try{localStorage.setItem(cacheKey(id),JSON.stringify({rows:rows,at:Date.now()}))}catch(e){}}
+function statusLoaded(d){setStatus('ok','Loaded '+(d.rows?d.rows.length:0).toLocaleString()+' rows · '+COLS.length+' columns ('+CAT.length+' categorical, '+NUM.length+' numeric)')}
+
+// fetch with a hard timeout so a slow flow never hangs the UI
+async function fetchWithTimeout(url,opts,ms){
+  const ctl=new AbortController();const id=setTimeout(()=>ctl.abort(),ms||20000);
+  try{return await fetch(url,Object.assign({signal:ctl.signal},opts||{}))}
+  finally{clearTimeout(id)}
+}
+
 async function loadDataset(id,force){
   const d=DATASETS.find(x=>x.id===id);if(!d)return;
   if(!d.url){ // mock — already in memory
-    applySchema(d.rows);d.loaded=true;d.error=null;
-    setStatus('ok','Loaded '+d.rows.length.toLocaleString()+' rows · '+COLS.length+' columns ('+CAT.length+' categorical, '+NUM.length+' numeric)');
+    applySchema(d.rows);d.loaded=true;d.error=null;statusLoaded(d);return;
+  }
+  // already in memory this session
+  if(d.loaded&&d.rows&&!force){applySchema(d.rows);statusLoaded(d);return}
+  // serve cached rows immediately (instant), then revalidate in the background
+  const cache=readDataCache(id);
+  if(cache&&!force){
+    d.rows=cache.rows;d.loaded=true;applySchema(d.rows);statusLoaded(d);
+    if(activeDatasetId===id)render();
+    // background revalidate only if cache is stale
+    if(Date.now()-cache.at>DATA_CACHE_TTL)fetchDataset(d,true);
     return;
   }
-  if(d.loaded&&d.rows&&!force){applySchema(d.rows);setStatus('ok','Loaded '+d.rows.length.toLocaleString()+' rows · '+COLS.length+' columns ('+CAT.length+' categorical, '+NUM.length+' numeric)');return}
-  setStatus('load','Fetching '+d.name+'…');spinRefresh(true);
+  await fetchDataset(d,false);
+}
+// actual network fetch (separated so it can run in background)
+async function fetchDataset(d,background){
+  if(!background){setStatus('load','Fetching '+d.name+'…');}
+  spinRefresh(true);
   try{
-    const res=await fetch(d.url,{method:'GET'});
+    const res=await fetchWithTimeout(d.url,{method:'GET'},20000);
     if(!res.ok)throw new Error('HTTP '+res.status+' '+res.statusText);
-    let payload;const txt=await res.text();
-    try{payload=JSON.parse(txt)}catch(e){throw new Error('Response was not valid JSON')}
+    const txt=await res.text();
+    let payload;try{payload=JSON.parse(txt)}catch(e){throw new Error('Response was not valid JSON')}
     const rows=extractRows(payload);
     if(!rows.length)throw new Error('No rows found in the response (checked array / value / rows / data / items)');
     d.rows=rows;d.loaded=true;d.error=null;
-    applySchema(rows);
-    setStatus('ok','Loaded '+rows.length.toLocaleString()+' rows · '+COLS.length+' columns ('+CAT.length+' categorical, '+NUM.length+' numeric)');
+    writeDataCache(d.id,rows);
+    if(activeDatasetId===d.id){applySchema(rows);statusLoaded(d);render();}
   }catch(err){
     d.error=String(err.message||err);
+    if(/abort/i.test(d.error))d.error='Timed out waiting for the flow (it took over 20s).';
     let hint=d.error;
     if(/Failed to fetch|NetworkError|CORS/i.test(d.error))hint='Could not reach the flow. This is usually a CORS restriction — the Power Automate flow must allow browser (cross-origin) requests, or the dashboard must be served from an allowed origin.';
-    setStatus('err',d.name+': '+hint);
+    if(!background)setStatus('err',d.name+': '+hint);
   }finally{spinRefresh(false)}
 }
 
@@ -1314,7 +1648,7 @@ function setTheme(mode){
   setTimeout(refreshAll,60);
 }
 let theme='dark';
-document.getElementById('themeBtn').onclick=()=>{theme=theme==='dark'?'light':'dark';setTheme(theme)};
+document.getElementById('themeBtn').onclick=()=>{theme=theme==='dark'?'light':'dark';setTheme(theme);snapshotLocal()};
 
 function seed(){
   tiles=[
@@ -1340,10 +1674,24 @@ const dashTitle=document.getElementById('dashTitle');
 dashTitle.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();dashTitle.blur()}});
 dashTitle.addEventListener('focus',()=>{document.querySelector('.head').classList.add('editing')});
 dashTitle.addEventListener('blur',()=>{document.querySelector('.head').classList.remove('editing');const t=dashTitle.textContent.trim();dashTitle.textContent=t||'Untitled dashboard'});
-applySchema(liveRows()); /* establish COLS/CAT/NUM for mock before seeding */
+applySchema(liveRows()); /* establish COLS/CAT/NUM */
 setDatasetLabel();
-seed();setDateLabel();render();setTheme('dark');
-loadDataset('mock',false); /* show status line for the default dataset */
+let _restored=false;
+try{
+  const snap=localStorage.getItem('insight_live_snapshot');
+  if(snap){
+    const s=JSON.parse(snap);
+    if(s&&Array.isArray(s.tiles)){
+      // restore dataset first if it differs, then apply the rest
+      if(s.datasetId&&DATASETS.find(d=>d.id===s.datasetId))activeDatasetId=s.datasetId;
+      applySchema(liveRows());
+      applyState(s);
+      _restored=true;
+    }
+  }
+}catch(e){}
+if(!_restored){seed();setDateLabel();render();setTheme('dark');}
+loadDataset(activeDatasetId,false);
 window.addEventListener('resize',()=>{document.querySelectorAll('.plot').forEach(p=>Plotly.Plots.resize(p))});
 </script>
 </body>
