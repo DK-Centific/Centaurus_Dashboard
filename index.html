@@ -172,9 +172,9 @@ input[type=color]{width:42px;height:30px;border-radius:8px;border:0.5px solid va
     <button class="btn" id="datasetBtn"><svg class="ico" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.7 4 3 9 3s9-1.3 9-3V5M3 12c0 1.7 4 3 9 3s9-1.3 9-3"/></svg><span id="datasetLabel">Mock data</span><svg class="ico" style="width:13px;height:13px" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
     <button class="icon-btn" id="refreshBtn" title="Refresh data"><svg class="ico" id="refreshIco" viewBox="0 0 24 24"><path d="M23 4v6h-6M1 20v-6h6M3.5 9a9 9 0 0114.9-3.4L23 10M1 14l4.6 4.4A9 9 0 0020.5 15"/></svg></button>
     <button class="btn" id="dateBtn"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><span id="dateLabel">Last 30 days</span><svg class="ico" style="width:13px;height:13px" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
-    <button class="btn" id="colorBtn"><svg class="ico" viewBox="0 0 24 24"><circle cx="13.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="10.5" r="2.5"/><circle cx="8.5" cy="7.5" r="2.5"/><circle cx="6.5" cy="12.5" r="2.5"/><path d="M12 2a10 10 0 100 20c1.4 0 2-1 2-2 0-1.5-1.5-2-1.5-3.5S15 13 16.5 13H18a4 4 0 004-4c0-4-4-7-10-7z"/></svg>Colors</button>
-    <button class="btn" id="textBtn" title="Text size"><svg class="ico" viewBox="0 0 24 24"><path d="M4 7V5h16v2M9 5v14M7 19h4M15 12V11h6v1M18 11v8M16.5 19h3"/></svg>Text</button>
     <button class="icon-btn" id="themeBtn" title="Toggle theme"><svg class="ico" id="themeIco" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z"/></svg></button>
+    <button class="btn" id="moreBtn" title="More"><svg class="ico" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>More</button>
+    <button class="btn" id="saveBtn"><svg class="ico" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>Save</button>
     <button class="btn btn-primary" id="addBtn"><svg class="ico" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Add tile</button>
   </div>
 </div>
@@ -368,6 +368,17 @@ function catOpacities(keys,dim){
 }
 
 function renderPlot(el,t){
+  // guard: a freshly added / partially configured tile may lack required fields
+  const needsDim=['bar','pie','line','stacked','box','heatmap'].includes(t.type);
+  const needsX=t.type==='scatter';
+  const needsMeasure=['histogram','box','scatter'].includes(t.type);
+  if((needsDim&&(!t.dim||!COLS.includes(t.dim)))||
+     (needsX&&(!t.xmeasure||!NUM.includes(t.xmeasure)))||
+     (needsMeasure&&(!t.measure||(t.measure!=='__count__'&&!NUM.includes(t.measure))))||
+     (t.type==='sankey'&&(!t.sankeyCols||t.sankeyCols.filter(Boolean).length<2))){
+    el.innerHTML='<div style="height:100%;display:flex;align-items:center;justify-content:center;text-align:center;color:var(--text3);font-size:12.5px;padding:12px">Configure this tile — click the gear to pick columns.</div>';
+    return;
+  }
   let rows=applyFilters(dateFiltered(),t.filters);
   let traces=[],layout=plotLayout();
   const cols=tileColors(t,12);
@@ -587,6 +598,7 @@ function startLift(el,t,sx,sy){
     const order=[...grid.children].map(n=>n.classList.contains('lifted')?null:(n.classList.contains('placeholder')?t.id:n.dataset.id)).filter(Boolean);
     setTimeout(()=>{
       tiles.sort((a,b)=>order.indexOf(a.id)-order.indexOf(b.id));
+      scheduleDraft();
       // move the lifted node into the placeholder's slot WITHOUT rebuilding (chart stays painted, no scroll jump)
       grid.insertBefore(el,ph);
       ph.remove();
@@ -623,7 +635,7 @@ function attachResize(el,t){
 }
 
 /* ---------- drawer / config (same adaptive engine + per-series colors) ---------- */
-function openDrawer(id){editingId=id;draft=JSON.parse(JSON.stringify(tiles.find(t=>t.id===id)));buildDrawer();document.getElementById('drawer').classList.add('open');document.getElementById('scrim').classList.add('open')}
+function openDrawer(id){editingId=id;draft=JSON.parse(JSON.stringify(tiles.find(t=>t.id===id)));normalizeDraft();buildDrawer();document.getElementById('drawer').classList.add('open');document.getElementById('scrim').classList.add('open')}
 function closeDrawer(){document.getElementById('drawer').classList.remove('open');document.getElementById('scrim').classList.remove('open');editingId=null;draft=null}
 function opt(arr,sel){return arr.map(o=>'<option value="'+o+'"'+(o===sel?' selected':'')+'>'+o+'</option>').join('')}
 function buildDrawer(){
@@ -631,6 +643,7 @@ function buildDrawer(){
   let h='';
   h+='<div class="field"><label>Title</label><input type="text" id="f_title" value="'+t.title.replace(/"/g,'&quot;')+'"></div>';
   h+='<div class="field"><label>Chart type</label><select id="f_type">'+CHART_TYPES.map(c=>'<option value="'+c.v+'"'+(c.v===t.type?' selected':'')+'>'+c.label+'</option>').join('')+'</select></div>';
+  h+='<div class="field" style="border-top:0.5px solid var(--border);padding-top:14px"><label>Data fields ('+activeDS().name.replace(/\s*\(.*\)$/,'')+')</label><div style="font-size:11px;color:var(--text3);margin-bottom:2px">Pick the columns this tile uses below. Available: '+(CAT.length+NUM.length)+' ('+CAT.length+' categorical, '+NUM.length+' numeric)</div></div>';
   h+='<div id="adaptive">'+adaptiveFields(t)+'</div>';
   h+='<div class="field"><label>Tile size</label><div class="size-grid"><div><label style="text-transform:none;letter-spacing:0;color:var(--text3)">Width ('+t.w+'/12)</label><input type="number" id="f_w" min="2" max="12" value="'+t.w+'"></div><div><label style="text-transform:none;letter-spacing:0;color:var(--text3)">Height ('+t.h+')</label><input type="number" id="f_h" min="2" max="12" value="'+t.h+'"></div></div></div>';
   h+='<div class="field" id="tileSchemeField"></div>';h+='<div class="field" id="seriesColorField"></div>';
@@ -640,7 +653,7 @@ function buildDrawer(){
   document.getElementById('f_title').oninput=e=>draft.title=e.target.value;
   document.getElementById('f_w').oninput=e=>draft.w=+e.target.value;
   document.getElementById('f_h').oninput=e=>draft.h=+e.target.value;
-  document.getElementById('addFilter').onclick=()=>{draft.filters.push({col:CAT[0],vals:[]});renderFilters()};
+  document.getElementById('addFilter').onclick=()=>{draft.filters.push({col:(CAT[0]||COLS[0]||''),vals:[]});renderFilters()};
   bindAdaptive();renderFilters();renderTileScheme();renderSeriesColors();
 }
 function seriesKeysFor(t){
@@ -685,11 +698,22 @@ function renderSeriesColors(){
 }
 function normalizeDraft(){
   const t=draft;
-  const defaults={dim:CAT[0],series:'SessionType',measure:'__count__',agg:'count',xmeasure:'Duration',color:'Region',bins:14,sankeyCols:['Region','SessionType','Status']};
-  ['dim','series','measure','agg','xmeasure','color','bins','sankeyCols'].forEach(k=>{if(t[k]===undefined)t[k]=defaults[k]});
-  if(t.type==='scatter'){if(!NUM.includes(t.measure))t.measure='Score';if(!NUM.includes(t.xmeasure))t.xmeasure='Duration'}
-  if(t.type==='histogram'&&!NUM.includes(t.measure))t.measure='Duration';
-  if(t.type==='box'&&!NUM.includes(t.measure))t.measure='Score';
+  const cat0=CAT[0]||COLS[0]||'';
+  const catN=CAT.filter(c=>c!=='Date');
+  const num0=NUM[0]||'';
+  const num1=NUM[1]||NUM[0]||'';
+  const defaults={dim:cat0,series:(catN[1]||catN[0]||cat0),measure:'__count__',agg:'count',xmeasure:num0,color:cat0,bins:14,sankeyCols:[catN[0]||cat0,catN[1]||catN[0]||cat0,catN[2]||catN[0]||cat0].filter(Boolean)};
+  ['dim','series','measure','agg','xmeasure','color','bins','sankeyCols'].forEach(k=>{if(t[k]===undefined||t[k]==='')t[k]=defaults[k]});
+  // coerce fields that must be numeric/categorical to valid columns in the active dataset
+  if(t.dim&&!CAT.includes(t.dim))t.dim=cat0;
+  if(t.series&&!CAT.includes(t.series))t.series=(catN[1]||catN[0]||cat0);
+  if(t.color&&t.color!==''&&!CAT.includes(t.color))t.color=cat0;
+  if(t.measure!=='__count__'&&!NUM.includes(t.measure))t.measure=(num0||'__count__');
+  if(t.type==='scatter'){if(!NUM.includes(t.measure))t.measure=num1;if(!NUM.includes(t.xmeasure))t.xmeasure=num0}
+  if(t.type==='histogram'&&!NUM.includes(t.measure))t.measure=num0;
+  if(t.type==='box'&&!NUM.includes(t.measure))t.measure=num0;
+  if(t.sankeyCols)t.sankeyCols=t.sankeyCols.map(c=>CAT.includes(c)?c:'').filter(Boolean);
+  if(!t.sankeyCols||!t.sankeyCols.length)t.sankeyCols=defaults.sankeyCols;
 }
 function adaptiveFields(t){
   const measOpts=['__count__'].concat(NUM);
@@ -733,13 +757,26 @@ function renderFilters(){
   list.querySelectorAll('.fi-head .x').forEach(x=>x.onclick=e=>{const i=+e.currentTarget.dataset.i;draft.filters.splice(i,1);renderFilters()});
   list.querySelectorAll('.vchip').forEach(c=>c.onclick=e=>{const i=+c.dataset.i,v=c.dataset.v;const f=draft.filters[i];const k=f.vals.indexOf(v);if(k>=0)f.vals.splice(k,1);else f.vals.push(v);renderFilters()});
 }
-function applyDraft(){const i=tiles.findIndex(t=>t.id===editingId);if(i>=0)tiles[i]=JSON.parse(JSON.stringify(draft));closeDrawer();render()}
+function applyDraft(){const i=tiles.findIndex(t=>t.id===editingId);if(i>=0)tiles[i]=JSON.parse(JSON.stringify(draft));closeDrawer();render();scheduleDraft()}
 
 document.getElementById('applyTile').onclick=applyDraft;
-document.getElementById('deleteTile').onclick=()=>{tiles=tiles.filter(t=>t.id!==editingId);closeDrawer();render()};
+document.getElementById('deleteTile').onclick=()=>{tiles=tiles.filter(t=>t.id!==editingId);closeDrawer();render();scheduleDraft()};
 document.getElementById('closeDrawer').onclick=closeDrawer;
 document.getElementById('scrim').onclick=closeDrawer;
-document.getElementById('addBtn').onclick=()=>{const t={id:uid(),type:'bar',title:'New tile',dim:'Region',measure:'__count__',agg:'count',filters:[],w:6,h:5};tiles.push(t);render();openDrawer(t.id)};
+function defaultDim(){return CAT[0]||COLS[0]||'';}
+function defaultMeasure(){return NUM[0]||'__count__';}
+document.getElementById('addBtn').onclick=()=>{
+  const t={id:uid(),type:'bar',title:'New tile',dim:defaultDim(),measure:'__count__',agg:'count',filters:[],w:6,h:5};
+  tiles.unshift(t); // add to the top so it's immediately visible
+  render();
+  scheduleDraft();
+  // scroll the new tile into view, then open its config
+  requestAnimationFrame(()=>{
+    const node=document.querySelector('.tile[data-id="'+t.id+'"]');
+    if(node)node.scrollIntoView({behavior:'smooth',block:'center'});
+    openDrawer(t.id);
+  });
+};
 document.getElementById('xfilterClear').onclick=()=>setXfilter(null);
 
 /* ---------- popovers: date + colors ---------- */
@@ -756,6 +793,30 @@ function showPop(anchorBtn,html,setup){
   openPop=p;setTimeout(()=>document.addEventListener('pointerdown',outside,true),0);
   setup&&setup(p);
 }
+document.getElementById('moreBtn').onclick=()=>{
+  const item=(id,icon,label)=>'<button class="preset" data-act="'+id+'" style="display:flex;align-items:center;gap:9px;padding:9px 11px"><svg class="ico" style="width:16px;height:16px" viewBox="0 0 24 24">'+icon+'</svg>'+label+'</button>';
+  let h='<div style="width:190px">';
+  h+=item('saved','<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>','Saved dashboards');
+  h+=item('colors','<circle cx="13.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="10.5" r="2.5"/><circle cx="8.5" cy="7.5" r="2.5"/><circle cx="6.5" cy="12.5" r="2.5"/><path d="M12 2a10 10 0 100 20c1.4 0 2-1 2-2 0-1.5-1.5-2-1.5-3.5S15 13 16.5 13H18a4 4 0 004-4c0-4-4-7-10-7z"/>','Colors');
+  h+=item('text','<path d="M4 7V5h16v2M9 5v14M7 19h4M15 12V11h6v1M18 11v8M16.5 19h3"/>','Text size');
+  h+='<div style="border-top:0.5px solid var(--border);margin-top:6px;padding-top:6px"></div>';
+  h+='<button class="preset" data-act="reset" style="display:flex;align-items:center;gap:9px;padding:9px 11px;color:#e0827d"><svg class="ico" style="width:16px;height:16px" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg>Reset (clear all tiles)</button>';
+  h+='</div>';
+  showPop(document.getElementById('moreBtn'),h,p=>{
+    const anchor=document.getElementById('moreBtn');
+    p.querySelectorAll('.preset').forEach(b=>b.onclick=()=>{
+      const act=b.dataset.act;
+      if(act==='reset'){
+        if(b.dataset.confirm!=='1'){b.dataset.confirm='1';b.innerHTML='<svg class="ico" style="width:16px;height:16px" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L14.7 3.9a2 2 0 00-3.4 0z"/></svg>Click again to confirm';return;}
+        closePop();
+        tiles=[];currentDashId=null;render();scheduleDraft();setStatus('info','Dashboard cleared — all tiles removed.');
+        return;
+      }
+      closePop();
+      setTimeout(()=>{ if(act==='saved')openGallery(anchor); else if(act==='colors')openColors(anchor); else if(act==='text')openText(anchor); },10);
+    });
+  });
+};
 const DATE_PRESETS=[['30','Last 30 days'],['7','Last 7 days'],['month','This month'],['all','All time']];
 document.getElementById('dateBtn').onclick=()=>{
   const b=dateBounds();
@@ -773,7 +834,7 @@ function setDateLabel(){
 }
 
 let pickIdx=0;
-document.getElementById('colorBtn').onclick=()=>{
+function openColors(anchor){
   const activeName=(globalScheme==='__custom__')?null:globalScheme;
   let h='<div style="width:262px;max-height:70vh;overflow-y:auto">';
   h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><span style="font-size:14px;font-weight:500">Color scheme</span><button class="preset" id="resetPalette" style="width:auto;font-size:11.5px;color:var(--accent);padding:4px 8px">Reset to default</button></div>';
@@ -782,14 +843,144 @@ document.getElementById('colorBtn').onclick=()=>{
   h+='<div style="display:flex;flex-wrap:wrap;gap:8px" id="swatchRow">';
   PALETTE.forEach((c,i)=>{h+='<div class="swatch'+(i===pickIdx?' sel':'')+'" data-i="'+i+'" style="background:'+c+'"></div>'});
   h+='</div><div class="color-input-row"><input type="color" id="pickColor" value="'+PALETTE[pickIdx]+'"><span style="font-size:12px;color:var(--text2)">Editing swatch '+(pickIdx+1)+'</span></div></div>';
-  showPop(document.getElementById('colorBtn'),h,p=>{
+  showPop(anchor,h,p=>{
     p.querySelectorAll('.scheme-row').forEach(r=>r.onclick=()=>{
       globalScheme=r.dataset.name;PALETTE=schemeByName(globalScheme).slice();pickIdx=0;
-      refreshAll();document.getElementById('colorBtn').click();
+      refreshAll();openColors(document.getElementById('moreBtn'));
     });
     p.querySelectorAll('.swatch').forEach(s=>s.onclick=()=>{pickIdx=+s.dataset.i;p.querySelectorAll('.swatch').forEach(x=>x.classList.remove('sel'));s.classList.add('sel');p.querySelector('#pickColor').value=PALETTE[pickIdx];p.querySelector('.color-input-row span').textContent='Editing swatch '+(pickIdx+1)});
     p.querySelector('#pickColor').oninput=e=>{PALETTE[pickIdx]=e.target.value;globalScheme='__custom__';p.querySelector('.swatch[data-i="'+pickIdx+'"]').style.background=e.target.value;refreshAll()};
-    p.querySelector('#resetPalette').onclick=()=>{globalScheme='Apple Pastels';PALETTE=schemeByName('Apple Pastels').slice();pickIdx=0;refreshAll();document.getElementById('colorBtn').click()};
+    p.querySelector('#resetPalette').onclick=()=>{globalScheme='Apple Pastels';PALETTE=schemeByName('Apple Pastels').slice();pickIdx=0;refreshAll();openColors(document.getElementById('moreBtn'))};
+  });
+};
+
+/* ---------- save / load / publish / gallery (Excel via Power Automate) ---------- */
+const SAVE_URL='https://default9b415834803a4da0afdcfe6b1d52d6.49.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/942518b4792d48d08180a3073f462bfd/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=lS06cmVMI7CjC3o4hvz5wN0lkj5VwUBZOuY0CEK-wno';
+const LOAD_URL='https://default9b415834803a4da0afdcfe6b1d52d6.49.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/2ff014f0efb94219980f772df3eae9e5/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=RkzxDB-UJS2rorcm3eyPGBU1Qn4zvg7Vzd3dOGzi6Xw';
+
+// stable per-browser owner id + display name (localStorage is allowed in the deployed app)
+function ownerId(){
+  let id;try{id=localStorage.getItem('insight_owner_id')}catch(e){}
+  if(!id){id='u'+Math.random().toString(36).slice(2,10);try{localStorage.setItem('insight_owner_id',id)}catch(e){}}
+  return id;
+}
+function ownerName(){let n;try{n=localStorage.getItem('insight_owner_name')}catch(e){}return n||''}
+function setOwnerName(n){try{localStorage.setItem('insight_owner_name',n)}catch(e){}}
+
+let currentDashId=null; // id of the dashboard currently loaded/saved
+
+// Serialize the full dashboard configuration (NOT the data — only the config).
+function getState(){
+  return {
+    name:document.getElementById('dashTitle').textContent.trim()||'Untitled dashboard',
+    tiles:tiles,
+    globalScheme:globalScheme,
+    palette:PALETTE,
+    dateRange:dateRange,
+    fscale:fscale,
+    datasetId:activeDatasetId,
+    theme:theme
+  };
+}
+function applyState(s){
+  if(!s)return;
+  document.getElementById('dashTitle').textContent=s.name||'Untitled dashboard';
+  tiles=Array.isArray(s.tiles)?s.tiles:[];
+  globalScheme=s.globalScheme||'Apple Pastels';
+  PALETTE=Array.isArray(s.palette)&&s.palette.length?s.palette:schemeByName(globalScheme).slice();
+  dateRange=s.dateRange||{preset:'all',from:null,to:null};
+  fscale=s.fscale||1;document.body.style.setProperty('--fscale',fscale);
+  if(s.theme){theme=s.theme}
+  setDateLabel();
+  // if the saved dataset differs, switch to it (re-detects schema), else just render
+  if(s.datasetId&&s.datasetId!==activeDatasetId&&DATASETS.find(d=>d.id===s.datasetId)){
+    switchDatasetThenRender(s.datasetId);
+  } else { setTheme(theme); render(); }
+}
+async function switchDatasetThenRender(id){
+  activeDatasetId=id;setDatasetLabel();
+  await loadDataset(id,false);
+  setTheme(theme);render();
+}
+
+// Save sends a POST as text/plain to avoid the CORS preflight (OPTIONS) problem.
+async function saveDashboard(isShared){
+  const name=getState().name;
+  if(!currentDashId)currentDashId='d'+Date.now()+Math.random().toString(36).slice(2,6);
+  const body={
+    id:currentDashId,name:name,ownerId:ownerId(),
+    isShared:isShared?'true':'false',
+    configJSON:JSON.stringify(getState()),
+    updatedAt:new Date().toISOString()
+  };
+  if(body.configJSON.length>30000){setStatus('err','Config is large ('+body.configJSON.length+' chars). Approaching the Excel cell limit — consider fewer tiles.');}
+  try{
+    const res=await fetch(SAVE_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(body)});
+    if(!res.ok)throw new Error('HTTP '+res.status);
+    setStatus('ok',(isShared?'Published':'Saved')+' “'+name+'” · '+new Date().toLocaleTimeString());
+    return true;
+  }catch(err){
+    let m=String(err.message||err);
+    if(/Failed to fetch|NetworkError|CORS/i.test(m))m='Could not reach the Save flow (likely CORS — the flow Response needs Access-Control-Allow-Origin for this site).';
+    setStatus('err','Save failed: '+m);return false;
+  }
+}
+
+// Debounced auto-draft: saves the working state (personal, not shared) after edits.
+let draftTimer=null;
+function scheduleDraft(){
+  clearTimeout(draftTimer);
+  draftTimer=setTimeout(()=>{ if(currentDashId||tiles.length){saveDashboard(false)} },2500);
+}
+
+async function listDashboards(){
+  const url=LOAD_URL+(LOAD_URL.includes('ownerId=')?'':('&ownerId='+encodeURIComponent(ownerId())));
+  const res=await fetch(url,{method:'GET'});
+  if(!res.ok)throw new Error('HTTP '+res.status);
+  const txt=await res.text();let payload;try{payload=JSON.parse(txt)}catch(e){throw new Error('Load response not JSON')}
+  return extractRows(payload);
+}
+
+document.getElementById('saveBtn').onclick=()=>{
+  const me=ownerId();
+  let h='<div style="width:248px"><div style="font-size:14px;font-weight:500;margin-bottom:10px">Save dashboard</div>';
+  h+='<div class="field" style="margin-bottom:12px"><label>Your name (shown to others)</label><input type="text" id="sv_name" value="'+ownerName().replace(/"/g,'&quot;')+'" placeholder="e.g. DK"></div>';
+  h+='<button class="btn" id="sv_save" style="width:100%;justify-content:center;margin-bottom:8px"><svg class="ico" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/></svg>Save (private)</button>';
+  h+='<button class="btn btn-primary" id="sv_publish" style="width:100%;justify-content:center"><svg class="ico" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>Publish (everyone can view)</button>';
+  h+='<div style="font-size:11px;color:var(--text3);margin-top:10px">Saving stores only the layout, filters, and visual settings — not the data itself.</div></div>';
+  showPop(document.getElementById('saveBtn'),h,p=>{
+    p.querySelector('#sv_name').oninput=e=>setOwnerName(e.target.value.trim());
+    p.querySelector('#sv_save').onclick=async()=>{closePop();await saveDashboard(false)};
+    p.querySelector('#sv_publish').onclick=async()=>{closePop();await saveDashboard(true)};
+  });
+};
+
+async function openGallery(anchor){
+  showPop(anchor,'<div style="width:300px"><div style="font-size:14px;font-weight:500;margin-bottom:10px">Saved dashboards</div><div id="gal_body" style="font-size:12.5px;color:var(--text2)">Loading…</div></div>',async p=>{
+    try{
+      const rows=await listDashboards();
+      const me=ownerId();
+      const mine=rows.filter(r=>String(r.ownerId)===me);
+      const shared=rows.filter(r=>String(r.isShared)==='true'&&String(r.ownerId)!==me);
+      function card(r){
+        const when=r.updatedAt?new Date(r.updatedAt).toLocaleString():'';
+        return '<div class="scheme-row gal-open" data-cfg="'+encodeURIComponent(r.configJSON||'{}')+'" data-id="'+(r.id||'')+'" style="flex-direction:column;align-items:stretch;gap:2px"><div style="display:flex;justify-content:space-between"><span style="font-size:12.5px;color:var(--text);font-weight:500">'+(r.name||'Untitled')+'</span><span style="font-size:10px;color:var(--text3)">'+(String(r.isShared)==='true'?'shared':'private')+'</span></div><span style="font-size:10px;color:var(--text3)">'+when+'</span></div>';
+      }
+      let h='';
+      h+='<div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">My dashboards</div>';
+      h+='<div class="scheme-list">'+(mine.length?mine.map(card).join(''):'<div style="font-size:12px;color:var(--text3);padding:6px 0">None yet — Save one.</div>')+'</div>';
+      h+='<div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 6px;border-top:0.5px solid var(--border);padding-top:12px">Shared by others</div>';
+      h+='<div class="scheme-list">'+(shared.length?shared.map(card).join(''):'<div style="font-size:12px;color:var(--text3);padding:6px 0">No shared dashboards yet.</div>')+'</div>';
+      p.querySelector('#gal_body').innerHTML=h;
+      p.querySelectorAll('.gal-open').forEach(c=>c.onclick=()=>{
+        try{const cfg=JSON.parse(decodeURIComponent(c.dataset.cfg));currentDashId=c.dataset.id;closePop();applyState(cfg);setStatus('ok','Opened “'+(cfg.name||'dashboard')+'”')}
+        catch(e){setStatus('err','Could not open that dashboard')}
+      });
+    }catch(err){
+      let m=String(err.message||err);
+      if(/Failed to fetch|NetworkError|CORS/i.test(m))m='Could not reach the Load flow (likely CORS — the flow Response needs Access-Control-Allow-Origin for this site).';
+      p.querySelector('#gal_body').innerHTML='<span style="color:#e0827d">'+m+'</span>';
+    }
   });
 };
 
@@ -875,12 +1066,12 @@ document.getElementById('datasetBtn').onclick=()=>{
 let fscale=1;
 const FSCALES=[['S',0.88],['M',1.0],['L',1.14],['XL',1.3]];
 function applyFscale(v){fscale=v;document.body.style.setProperty('--fscale',v);setTimeout(refreshAll,40)}
-document.getElementById('textBtn').onclick=()=>{
+function openText(anchor){
   let h='<div style="width:200px"><div style="font-size:14px;font-weight:500;margin-bottom:10px">Text size</div>';
   h+='<div style="display:flex;gap:6px;margin-bottom:12px">'+FSCALES.map(([l,v])=>'<button class="fsbtn'+(Math.abs(v-fscale)<0.001?' on':'')+'" data-v="'+v+'" style="flex:1">'+l+'</button>').join('')+'</div>';
   h+='<div style="display:flex;align-items:center;gap:10px"><span style="font-size:11px;color:var(--text3)">A</span><input type="range" id="fsRange" min="0.8" max="1.5" step="0.02" value="'+fscale+'" style="flex:1"><span style="font-size:20px;color:var(--text3)">A</span></div>';
   h+='<div style="text-align:center;font-size:11.5px;color:var(--text2);margin-top:8px">'+Math.round(fscale*100)+'%</div></div>';
-  showPop(document.getElementById('textBtn'),h,p=>{
+  showPop(anchor,h,p=>{
     p.querySelectorAll('.fsbtn').forEach(b=>b.onclick=()=>{applyFscale(+b.dataset.v);p.querySelector('#fsRange').value=b.dataset.v;p.querySelectorAll('.fsbtn').forEach(x=>x.classList.remove('on'));b.classList.add('on');p.querySelector('div[style*="text-align:center"]').textContent=Math.round(fscale*100)+'%'});
     p.querySelector('#fsRange').oninput=e=>{applyFscale(+e.target.value);p.querySelectorAll('.fsbtn').forEach(x=>x.classList.toggle('on',Math.abs((+x.dataset.v)-fscale)<0.001));p.querySelector('div[style*="text-align:center"]').textContent=Math.round(fscale*100)+'%'};
   });
