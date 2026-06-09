@@ -936,7 +936,8 @@ function scheduleDraft(){
 async function listDashboards(){
   // Use the signed URL exactly as issued — appending params after sig= invalidates it (400).
   // The client filters rows by owner/shared after fetching.
-  const res=await fetch(LOAD_URL,{method:'GET'});
+  // Load flow's HTTP trigger expects POST; send an empty JSON body. Client filters the returned rows.
+  const res=await fetch(LOAD_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
   if(!res.ok)throw new Error('HTTP '+res.status);
   const txt=await res.text();let payload;try{payload=JSON.parse(txt)}catch(e){throw new Error('Load response not JSON')}
   return extractRows(payload);
