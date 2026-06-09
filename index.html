@@ -534,8 +534,8 @@ function plotLayout(extra){
     paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',
     font:{family:'-apple-system,SF Pro Text,sans-serif',color:text,size:Math.round(11*fscale)},
     margin:{l:40,r:14,t:8,b:34},showlegend:false,
-    xaxis:{gridcolor:grid,zerolinecolor:grid,tickfont:{size:Math.round(10*fscale)}},
-    yaxis:{gridcolor:grid,zerolinecolor:grid,tickfont:{size:Math.round(10*fscale)}},
+    xaxis:{gridcolor:grid,zerolinecolor:grid,tickfont:{size:Math.round(10*fscale)},automargin:true},
+    yaxis:{gridcolor:grid,zerolinecolor:grid,tickfont:{size:Math.round(10*fscale)},automargin:true},
     hoverlabel:{bgcolor:css('--glass'),bordercolor:css('--border2'),font:{family:'-apple-system,sans-serif',color:css('--text'),size:12}},
     transition:{duration:450,easing:'cubic-in-out'},
   },extra||{});
@@ -546,6 +546,54 @@ const CONFIG={displayModeBar:false,responsive:true};
 function catOpacities(keys,dim){
   if(!xfilter||xfilter.col!==dim)return keys.map(()=>1);
   return keys.map(k=>k===xfilter.val?1:0.18);
+}
+
+// Compact, non-overflowing number format for value labels.
+// Integers print whole; large numbers use k/M; otherwise one decimal. Negatives kept.
+function fmtCompact(n){
+  n=+n; if(!isFinite(n))return '';
+  const a=Math.abs(n), sign=n<0?'-':'';
+  if(a>=1e6)return sign+(+(a/1e6).toFixed(a/1e6>=10?0:1))+'M';
+  if(a>=1e3)return sign+(+(a/1e3).toFixed(a/1e3>=10?0:1))+'k';
+  if(Number.isInteger(n))return n.toLocaleString();
+  return (+n.toFixed(1)).toLocaleString();
+}
+// Truncate a long category label to keep axis ticks / labels from overflowing the tile.
+function truncLabel(s,max){s=String(s);max=max||14;return s.length>max?s.slice(0,max-1)+'…':s;}
+// Resolve the rendered size for value labels.
+// - per-key override (t.labelOverrides[key]) wins when set
+// - else the tile base size (t.labelSize)
+// - if t.autoFitLabels, multiply by a fit factor so dense/small tiles don't clip
+function labelBaseSize(t){return t.labelSize||(t.type==='stacked'?12:13);}
+function autoFitFactor(t,count){
+  if(t.autoFitLabels===false)return 1;
+  // wider tiles (t.w) and fewer categories => closer to 1; tight tiles shrink labels
+  const perCat=(t.w||4)*2.2;            // rough horizontal room per category unit
+  const room=perCat/Math.max(1,count);  // arbitrary units of room per label
+  const f=Math.max(.55,Math.min(1,room/3.2));
+  return f;
+}
+// Returns either a single number (uniform) or an array (when per-key overrides exist),
+// suitable for Plotly textfont.size.
+function labelSizes(t,keys){
+  const base=labelBaseSize(t);
+  const fit=autoFitFactor(t,keys.length);
+  const ov=t.labelOverrides||{};
+  const hasOv=keys.some(k=>ov[k]!=null);
+  if(!hasOv)return Math.max(7,Math.round(base*fit*fscale));
+  return keys.map(k=>{
+    const sz=(ov[k]!=null)?ov[k]:base;        // overrides are absolute, not auto-fit
+    const factor=(ov[k]!=null)?1:fit;          // only auto-fit the non-overridden ones
+    return Math.max(7,Math.round(sz*factor*fscale));
+  });
+}
+
+// Single scalar size for a one-key context (e.g. a stacked series), honoring overrides + auto-fit.
+function labelSizeSingle(t,key,count){
+  const base=labelBaseSize(t);
+  const ov=(t.labelOverrides||{})[key];
+  if(ov!=null)return Math.max(7,Math.round(ov*fscale));
+  return Math.max(7,Math.round(base*autoFitFactor(t,count||1)*fscale));
 }
 
 function renderPlot(el,t){
@@ -570,9 +618,10 @@ function renderPlot(el,t){
     const op=catOpacities(keys,t.dim);
     traces=[{type:'bar',x:keys,y:g.map(d=>+d.val.toFixed(1)),
       marker:{color:keys.map((k,i)=>cols[0]),opacity:op},
-      text:t.showLabels?g.map(d=>(+d.val.toFixed(1)).toLocaleString()):undefined,
-      textposition:t.showLabels?'outside':'none',textfont:{size:Math.round((t.labelSize||13)*fscale)},cliponaxis:false,
-      hovertemplate:'%{x}<br>%{y}<extra></extra>',customdata:keys}];
+      text:t.showLabels?g.map(d=>fmtCompact(d.val)):undefined,
+      textposition:t.showLabels?'outside':'none',textfont:{size:labelSizes(t,keys)},cliponaxis:false,
+      hovertemplate:'%{customdata}<br>%{y}<extra></extra>',customdata:keys}];
+    layout.xaxis=Object.assign({},layout.xaxis,{tickmode:'array',tickvals:keys,ticktext:keys.map(k=>truncLabel(k,12))});
   } else if(t.type==='pie'){
     const g=groupAgg(rows,t.dim,t.measure,t.agg);
     const keys=g.map(d=>d.key);
@@ -581,11 +630,11 @@ function renderPlot(el,t){
       if(xfilter&&xfilter.col===t.dim&&k!==xfilter.val)return 'rgba(150,150,170,0.2)';
       return base[i];
     });
-    traces=[{type:'pie',labels:keys,values:g.map(d=>+d.val.toFixed(1)),hole:.62,marker:{colors:colors},textinfo:t.showLabels?'label+value':'percent',textfont:{size:Math.round((t.labelSize||13)*fscale)},hovertemplate:'%{label}<br>%{value} (%{percent})<extra></extra>',customdata:keys}];
+    traces=[{type:'pie',labels:keys,values:g.map(d=>+d.val.toFixed(1)),hole:.62,marker:{colors:colors},textinfo:t.showLabels?'label+value':'percent',texttemplate:t.showLabels?keys.map((k,i)=>'%{label}<br>'+fmtCompact(g[i].val)):undefined,textfont:{size:labelSizes(t,keys)},hovertemplate:'%{label}<br>%{value} (%{percent})<extra></extra>',customdata:keys}];
     layout.margin={l:8,r:8,t:8,b:8};
   } else if(t.type==='line'){
     const g=groupAgg(rows,t.dim,t.measure,t.agg);
-    traces=[{type:'scatter',mode:t.showLabels?'lines+markers+text':'lines',x:g.map(d=>d.key),y:g.map(d=>+d.val.toFixed(1)),line:{color:cols[0],width:2.5,shape:'spline'},fill:'tozeroy',fillcolor:'rgba(127,119,221,.12)',text:t.showLabels?g.map(d=>(+d.val.toFixed(1)).toLocaleString()):undefined,textposition:'top center',textfont:{size:Math.round((t.labelSize||13)*fscale)},hovertemplate:'%{x}<br>%{y}<extra></extra>'}];
+    traces=[{type:'scatter',mode:t.showLabels?'lines+markers+text':'lines',x:g.map(d=>d.key),y:g.map(d=>+d.val.toFixed(1)),line:{color:cols[0],width:2.5,shape:'spline'},fill:'tozeroy',fillcolor:'rgba(127,119,221,.12)',text:t.showLabels?g.map(d=>fmtCompact(d.val)):undefined,textposition:'top center',textfont:{size:labelSizes(t,g.map(d=>d.key))},hovertemplate:'%{x}<br>%{y}<extra></extra>'}];
   } else if(t.type==='stacked'){
     const seriesKeys=[...new Set(rows.map(r=>String(r[t.series])))].sort();
     const dimKeys=[...new Set(rows.map(r=>String(r[t.dim])))].sort();
@@ -594,8 +643,8 @@ function renderPlot(el,t){
       const sub=rows.filter(r=>String(r[t.dim])===dk&&String(r[t.series])===sk);
       return +aggregate(sub.map(r=>((t.measure!=='__count__')||(t.agg==='unique'))?r[t.measure]:1),(t.measure==='__count__'&&t.agg!=='unique')?'count':t.agg).toFixed(1);
     });return {type:'bar',name:sk,x:dimKeys,y:ys,marker:{color:cols[i],opacity:op},
-      text:t.showLabels?ys.map(v=>v?(+v.toFixed(1)).toLocaleString():''):undefined,
-      textposition:t.showLabels?'inside':'none',insidetextfont:{size:Math.round((t.labelSize||12)*fscale),color:'#fff'},
+      text:t.showLabels?ys.map(v=>v?fmtCompact(v):''):undefined,
+      textposition:t.showLabels?'inside':'none',insidetextfont:{size:labelSizeSingle(t,sk,seriesKeys.length),color:'#fff'},
       customdata:dimKeys,hovertemplate:'%{x} · '+sk+'<br>%{y}<extra></extra>'}});
     layout.barmode='stack';layout.showlegend=true;layout.legend={orientation:'h',y:-0.22,font:{size:9}};layout.margin.b=44;
   } else if(t.type==='histogram'){
@@ -793,7 +842,7 @@ function renderKpi(el,t){
   const useCol=(t.measure!=='__count__')||(t.agg==='unique');
   const vals=rows.map(r=>useCol?r[t.measure]:1);
   let v=aggregate(vals,(t.measure==='__count__'&&t.agg!=='unique')?'count':t.agg);
-  const fmt=n=>t.agg==='count'?(+n).toLocaleString():(+(+n).toFixed(1)).toLocaleString();
+  const fmt=n=>fmtCompact(n);
   const disp=fmt(v);
   if(t._delta===undefined)t._delta=(Math.random()*30-8);
   const up=t._delta>=0;
@@ -853,7 +902,7 @@ function tileTotal(t){
   try{
     let rows=applyFilters(dateFiltered(),t.filters);
     if(xfilter)rows=rows.filter(r=>String(r[xfilter.col])===xfilter.val);
-    const fmt=n=>{n=+n;return (Math.abs(n)>=1000?Math.round(n).toLocaleString():(+n.toFixed(1)).toLocaleString())};
+    const fmt=n=>fmtCompact(n);
     if(['bar','pie','line','stacked'].includes(t.type)){
       const measure=t.measure;
       if(t.agg==='unique'&&measure!=='__count__'){return 'Unique: '+fmt(new Set(rows.map(r=>String(r[measure]))).size)}
@@ -1055,6 +1104,12 @@ function toggleMoreSettings(){
     // Data labels toggle (all chart types)
     h+='<div class="checkbox-row'+(t.showLabels?' on':'')+'" id="ms_labels"><span class="checkbox-box"><svg class="ico" style="width:13px;height:13px;stroke:#fff" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></span>Show data labels</div>';
     h+='<div id="ms_labelsize" style="display:'+(t.showLabels?'block':'none')+';margin:6px 0 4px 30px"><label style="text-transform:none;letter-spacing:0;color:var(--text3);font-size:11px;display:block;margin-bottom:6px">Value label size</label><div style="display:flex;align-items:center;gap:10px"><input type="range" id="ms_lsize" min="9" max="32" step="1" value="'+(t.labelSize||(t.type==='stacked'?12:13))+'" style="flex:1"><span id="ms_lsizeout" style="font-size:12px;color:var(--text2);min-width:38px;text-align:right">'+(t.labelSize||(t.type==='stacked'?12:13))+'px</span></div></div>';
+    // Auto-fit + per-label overrides (category charts only): bar, pie, line, stacked
+    const _catChart=['bar','pie','line','stacked'].includes(t.type);
+    if(_catChart){
+      h+='<div id="ms_autofitwrap" style="display:'+(t.showLabels?'flex':'none')+';align-items:center;justify-content:space-between;margin:4px 0 4px 30px"><div><div style="font-size:12.5px;color:var(--text)">Auto-fit to tile</div><div style="font-size:10.5px;color:var(--text3)">Shrinks labels so none clip</div></div><div class="checkbox-row'+(t.autoFitLabels?' on':'')+'" id="ms_autofit" style="margin:0;padding:5px 8px"><span class="checkbox-box"><svg class="ico" style="width:13px;height:13px;stroke:#fff" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></span></div></div>';
+      h+='<div id="ms_overrides" style="display:'+(t.showLabels?'block':'none')+';margin:8px 0 2px 30px"><label style="text-transform:none;letter-spacing:0;color:var(--text3);font-size:11px;display:block;margin-bottom:6px">Per-label size overrides</label><div id="ms_ovlist"></div></div>';
+    }
     // Totals checkbox — ONLY for bar/pie (visual graphs)
     if(isBarPie){
       h+='<div class="checkbox-row'+(t.showTotal?' on':'')+'" id="ms_total"><span class="checkbox-box"><svg class="ico" style="width:13px;height:13px;stroke:#fff" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></span>Show total number in header</div>';
@@ -1068,8 +1123,10 @@ function toggleMoreSettings(){
   p.innerHTML=h;
   document.getElementById('drawer').appendChild(p);
   // bind
-  const lb=document.getElementById('ms_labels');if(lb)lb.onclick=()=>{draft.showLabels=!draft.showLabels;lb.classList.toggle('on',draft.showLabels);const w=document.getElementById('ms_labelsize');if(w)w.style.display=draft.showLabels?'block':'none'};
+  const lb=document.getElementById('ms_labels');if(lb)lb.onclick=()=>{draft.showLabels=!draft.showLabels;lb.classList.toggle('on',draft.showLabels);['ms_labelsize','ms_autofitwrap','ms_overrides'].forEach(id=>{const w=document.getElementById(id);if(w)w.style.display=draft.showLabels?(id==='ms_autofitwrap'?'flex':'block'):'none'})};
   const ls=document.getElementById('ms_lsize');if(ls)ls.oninput=e=>{draft.labelSize=+e.target.value;const o=document.getElementById('ms_lsizeout');if(o)o.textContent=e.target.value+'px'};
+  const af2=document.getElementById('ms_autofit');if(af2)af2.onclick=()=>{draft.autoFitLabels=!draft.autoFitLabels;af2.classList.toggle('on',draft.autoFitLabels)};
+  renderOverrideList();
   const tt=document.getElementById('ms_total');if(tt)tt.onclick=()=>{draft.showTotal=!draft.showTotal;tt.classList.toggle('on',draft.showTotal);const w=document.getElementById('ms_totalsize');if(w)w.style.display=draft.showTotal?'block':'none'};
   const ts=document.getElementById('ms_tsize');if(ts)ts.oninput=e=>{draft.totalSize=+e.target.value;const o=document.getElementById('ms_tsizeout');if(o)o.textContent=e.target.value+'px'};
   const af=document.getElementById('addFilter');if(af)af.onclick=()=>{draft.filters.push({col:(CAT[0]||COLS[0]||''),vals:[]});renderFilters()};
@@ -1084,6 +1141,39 @@ function seriesKeysFor(t){
   if(t.type==='scatter'&&t.color)return [...new Set(rows.map(r=>String(r[t.color])))].sort();
   return [];
 }
+function labelKeysFor(t){
+  // categories that have an on-chart value label
+  if(t.type==='line')return [...new Set(dateFiltered().map(r=>String(r[t.dim])))].sort();
+  return seriesKeysFor(t);
+}
+function renderOverrideList(){
+  const list=document.getElementById('ms_ovlist');if(!list)return;
+  const t=draft;
+  const keys=labelKeysFor(t).slice(0,40); // cap for very high-cardinality dims
+  if(!keys.length){list.innerHTML='<div style="font-size:11px;color:var(--text3)">No categories to size individually.</div>';return}
+  t.labelOverrides=t.labelOverrides||{};
+  const base=t.labelSize||(t.type==='stacked'?12:13);
+  list.innerHTML=keys.map(k=>{
+    const ov=t.labelOverrides[k];
+    const val=(ov!=null)?ov:base;
+    const lab=(ov!=null)?(ov+'px'):'auto';
+    const ke=k.replace(/"/g,'&quot;');
+    return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px"><span title="'+ke+'" style="flex:1;font-size:11.5px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+k+'</span>'+
+      '<input type="range" class="ms-ov" data-k="'+ke+'" min="9" max="40" step="1" value="'+val+'" style="width:120px">'+
+      '<span class="ms-ovout" data-k="'+ke+'" style="font-size:10.5px;color:var(--text3);min-width:34px;text-align:right">'+lab+'</span>'+
+      '<span class="ms-ovreset" data-k="'+ke+'" title="Reset to auto" style="cursor:pointer;color:var(--text3);display:'+(ov!=null?'inline-flex':'none')+'"><svg class="ico" style="width:13px;height:13px" viewBox="0 0 24 24"><path d="M3 12a9 9 0 109-9 9 9 0 00-7 3.3M3 4v4h4"/></svg></span></div>';
+  }).join('');
+  list.querySelectorAll('.ms-ov').forEach(r=>r.oninput=e=>{
+    const k=e.target.dataset.k;draft.labelOverrides[k]=+e.target.value;
+    const row=e.target.closest('div');
+    const o=row&&row.querySelector('.ms-ovout');if(o)o.textContent=e.target.value+'px';
+    const rs=row&&row.querySelector('.ms-ovreset');if(rs)rs.style.display='inline-flex';
+  });
+  list.querySelectorAll('.ms-ovreset').forEach(b=>b.onclick=()=>{
+    const k=b.dataset.k;delete draft.labelOverrides[k];renderOverrideList();
+  });
+}
+function seriesKeysFor_unused(){}
 function renderTileScheme(){
   const wrap=document.getElementById('tileSchemeField');if(!wrap)return;
   // only chart types that map a categorical ramp benefit from a scheme
@@ -1135,6 +1225,8 @@ function normalizeDraft(){
   if(t.type==='table'&&!t.table)t.table=defaultTableConfig();
   if(t.sankeyCols)t.sankeyCols=t.sankeyCols.map(c=>CAT.includes(c)?c:'').filter(Boolean);
   if(!t.sankeyCols||!t.sankeyCols.length)t.sankeyCols=defaults.sankeyCols;
+  if(t.autoFitLabels===undefined)t.autoFitLabels=true;
+  if(!t.labelOverrides||typeof t.labelOverrides!=='object')t.labelOverrides={};
 }
 function adaptiveFields(t){
   const measOpts=['__count__'].concat(NUM);
@@ -1257,6 +1349,7 @@ function showPop(anchorBtn,html,setup){
 document.getElementById('moreBtn').onclick=()=>{
   const item=(id,icon,label)=>'<button class="preset" data-act="'+id+'" style="display:flex;align-items:center;gap:9px;padding:9px 11px"><svg class="ico" style="width:16px;height:16px" viewBox="0 0 24 24">'+icon+'</svg>'+label+'</button>';
   let h='<div style="width:190px">';
+  h+=item('welcome','<path d="M3 11l9-8 9 8M5 10v10a1 1 0 001 1h12a1 1 0 001-1V10M9 21v-6h6v6"/>','Back to welcome');
   h+=item('saved','<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>','Saved dashboards');
   h+=item('colors','<circle cx="13.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="10.5" r="2.5"/><circle cx="8.5" cy="7.5" r="2.5"/><circle cx="6.5" cy="12.5" r="2.5"/><path d="M12 2a10 10 0 100 20c1.4 0 2-1 2-2 0-1.5-1.5-2-1.5-3.5S15 13 16.5 13H18a4 4 0 004-4c0-4-4-7-10-7z"/>','Colors');
   h+=item('text','<path d="M4 7V5h16v2M9 5v14M7 19h4M15 12V11h6v1M18 11v8M16.5 19h3"/>','Text size');
@@ -1274,6 +1367,7 @@ document.getElementById('moreBtn').onclick=()=>{
         return;
       }
       closePop();
+      if(act==='welcome'){showLanding();return;}
       setTimeout(()=>{ if(act==='saved')openGallery(anchor); else if(act==='colors')openColors(anchor); else if(act==='text')openText(anchor); },10);
     });
   });
@@ -1732,11 +1826,23 @@ dashTitle.addEventListener('focus',()=>{document.querySelector('.head').classLis
 dashTitle.addEventListener('blur',()=>{document.querySelector('.head').classList.remove('editing');const t=dashTitle.textContent.trim();dashTitle.textContent=t||'Untitled dashboard'});
 applySchema(liveRows()); /* establish COLS/CAT/NUM */
 setDatasetLabel();
+function markEntered(){try{localStorage.setItem('insight_entered','1')}catch(e){}}
 function dismissLanding(){
+  markEntered();
   const el=document.getElementById('landing');
   if(!el)return;
   el.classList.add('hide');
   setTimeout(()=>{el.style.display='none'},500);
+}
+function showLanding(){
+  // explicit return to the welcome screen from the menu
+  try{localStorage.removeItem('insight_entered')}catch(e){}
+  const el=document.getElementById('landing');
+  if(!el)return;
+  el.style.display='flex';
+  // force reflow so the opacity transition replays
+  void el.offsetWidth;
+  el.classList.remove('hide');
 }
 document.getElementById('landingDataset').onclick=()=>{
   dismissLanding();
@@ -1749,11 +1855,13 @@ document.getElementById('landingLoad').onclick=()=>{
 document.getElementById('landingSkip').onclick=()=>dismissLanding();
 
 let _restored=false;
-// Decide landing visibility up front: skip it whenever a prior session snapshot exists,
-// so a restored (even half-rendered) dashboard never sits behind the welcome screen.
+// Decide landing visibility up front: skip it whenever a prior session snapshot exists
+// OR the user has already entered a dashboard this device (so reload/refresh keeps them
+// in the dashboard). The welcome screen is then only reachable via "Back to welcome".
 let _hasSnapshot=false;
 try{const _s=localStorage.getItem('insight_live_snapshot');_hasSnapshot=!!(_s&&JSON.parse(_s)&&Array.isArray(JSON.parse(_s).tiles));}catch(e){}
-if(_hasSnapshot){const _l=document.getElementById('landing');if(_l){_l.classList.add('hide');_l.style.display='none';}}
+let _entered=false;try{_entered=localStorage.getItem('insight_entered')==='1'}catch(e){}
+if(_hasSnapshot||_entered){const _l=document.getElementById('landing');if(_l){_l.classList.add('hide');_l.style.display='none';}}
 try{
   const snap=localStorage.getItem('insight_live_snapshot');
   if(snap){
