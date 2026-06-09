@@ -166,6 +166,7 @@ button{font-family:var(--font);cursor:pointer;border:none;background:none;color:
 .tmbtn{width:24px;height:24px;border-radius:7px;display:flex;align-items:center;justify-content:center;color:var(--text3);transition:all .2s}
 .tmbtn:hover{background:var(--card2);color:var(--text)}
 .plot{flex:1;min-height:0;width:100%}
+.plot.has-table{display:flex;flex-direction:column;min-height:0;overflow:hidden}
 .kpi .val{font-size:calc(28px*var(--fscale,1));font-weight:600;letter-spacing:-1px;margin-top:7px}
 .kpi .delta{font-size:calc(12px*var(--fscale,1));margin-top:6px;display:inline-flex;align-items:center;gap:4px}
 .delta.up{color:#5DCAA5}.delta.down{color:#e0827d}
@@ -273,6 +274,7 @@ input[type=color]{width:42px;height:30px;border-radius:8px;border:0.5px solid va
   </div>
   <div class="drawer-body" id="drawerBody"></div>
   <div class="drawer-foot">
+    <button class="btn" id="duplicateTile"><svg class="ico" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>Duplicate</button>
     <button class="btn" id="deleteTile"><svg class="ico" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg>Delete</button>
     <button class="btn btn-primary" id="applyTile"><svg class="ico" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>Apply</button>
   </div>
@@ -598,8 +600,25 @@ function labelSizeSingle(t,key,count){
   return Math.max(7,Math.round(base*autoFitFactor(t,count||1)*fscale));
 }
 
+// When a tile's "exclude empty values" is on, drop rows whose relevant field(s) are blank
+// (empty string, null, undefined). Returns rows unchanged when the option is off.
+function isBlank(v){return v===null||v===undefined||String(v).trim()===''}
+function excludeEmptyRows(t,rows){
+  if(!t.excludeEmpty)return rows;
+  const fields=[];
+  if(['bar','pie','line','box','heatmap'].includes(t.type)&&t.dim)fields.push(t.dim);
+  if(t.type==='stacked'){if(t.dim)fields.push(t.dim);if(t.series)fields.push(t.series);}
+  if(t.type==='scatter'){if(t.xmeasure)fields.push(t.xmeasure);if(t.measure&&t.measure!=='__count__')fields.push(t.measure);}
+  if(['histogram','box'].includes(t.type)&&t.measure&&t.measure!=='__count__')fields.push(t.measure);
+  if((t.measure&&t.measure!=='__count__')&&['bar','pie','line','stacked'].includes(t.type)&&t.agg!=='count')fields.push(t.measure);
+  if(t.type==='sankey'&&Array.isArray(t.sankeyCols))t.sankeyCols.forEach(c=>{if(c)fields.push(c);});
+  if(!fields.length)return rows;
+  const uniq=[...new Set(fields)];
+  return rows.filter(r=>uniq.every(f=>!isBlank(r[f])));
+}
 function renderPlot(el,t){
   if(t.type==='table'){return renderTable(el,t);}
+  if(el&&el.classList)el.classList.remove('has-table');
   // guard: a freshly added / partially configured tile may lack required fields
   const needsDim=['bar','pie','line','stacked','box','heatmap'].includes(t.type);
   const needsX=t.type==='scatter';
@@ -611,7 +630,7 @@ function renderPlot(el,t){
     el.innerHTML='<div style="height:100%;display:flex;align-items:center;justify-content:center;text-align:center;color:var(--text3);font-size:12.5px;padding:12px">Configure this tile — click the gear to pick columns.</div>';
     return;
   }
-  let rows=applyFilters(dateFiltered(),t.filters);
+  let rows=applyFilters(dateFiltered(),t.filters);rows=excludeEmptyRows(t,rows);
   let traces=[],layout=plotLayout();
   const cols=tileColors(t,12);
   if(t.type==='bar'){
@@ -622,8 +641,32 @@ function renderPlot(el,t){
       marker:{color:keys.map((k,i)=>cols[0]),opacity:op},
       text:t.showLabels?g.map(d=>fmtCompact(d.val)):undefined,
       textposition:t.showLabels?'outside':'none',textfont:{size:labelSizes(t,keys)},cliponaxis:false,
-      hovertemplate:'%{customdata}<br>%{y}<extra></extra>',customdata:keys}];
-    layout.xaxis=Object.assign({},layout.xaxis,{tickmode:'array',tickvals:keys,ticktext:keys.map(k=>truncLabel(k,12))});
+      hovertemplate:'%{customdata[1]}<br>'+(measureLabel(t)?measureLabel(t)+': ':'')+'%{y}<extra></extra>',customdata:keys.map(k=>[k,dispKey(t,k)])}];
+    layout.xaxis=Object.assign({},layout.xaxis,{tickmode:'array',tickvals:keys,ticktext:keys.map(k=>truncLabel(dispKey(t,k),12))});
+    // Goal / target lines — only when enabled and at least one goal is defined.
+    if(t.showGoal){
+      const gv=parseFloat(t.goalValue);
+      const ov=t.goalOverrides||{};
+      // per-bar target = override for that key, else the global goal (if numeric)
+      const targets=keys.map(k=>{const o=parseFloat(ov[k]);return isFinite(o)?o:(isFinite(gv)?gv:null);});
+      const anyTarget=targets.some(v=>v!==null);
+      if(anyTarget){
+        const accentG=css('--accent');
+        const tx=[],ty=[];
+        keys.forEach((k,i)=>{if(targets[i]!==null){tx.push(k);ty.push(targets[i]);}});
+        traces.push({type:'scatter',mode:'markers',x:tx,y:ty,
+          marker:{symbol:'line-ew-open',size:28,line:{color:accentG,width:3},color:accentG},
+          hovertemplate:'Target: %{y}<extra></extra>',showlegend:false,cliponaxis:false});
+        // mark bars meeting/exceeding their target with a subtle accent outline
+        const meet=keys.map((k,i)=>targets[i]!==null && g[i].val>=targets[i]);
+        traces[0].marker.line={color:keys.map((k,i)=>meet[i]?accentG:'rgba(0,0,0,0)'),width:keys.map((k,i)=>meet[i]?2:0)};
+      }
+      // global dashed reference line across the whole plot (in addition to per-bar ticks)
+      if(isFinite(gv)){
+        layout.shapes=(layout.shapes||[]).concat([{type:'line',xref:'paper',x0:0,x1:1,yref:'y',y0:gv,y1:gv,line:{color:css('--text3'),width:1,dash:'dash'}}]);
+        layout.annotations=(layout.annotations||[]).concat([{xref:'paper',x:1,y:gv,yref:'y',xanchor:'right',yanchor:'bottom',text:'goal '+fmtCompact(gv),showarrow:false,font:{size:9,color:css('--text3')}}]);
+      }
+    }
   } else if(t.type==='pie'){
     const g=groupAgg(rows,t.dim,t.measure,t.agg);
     const keys=g.map(d=>d.key);
@@ -632,11 +675,13 @@ function renderPlot(el,t){
       if(xfilter&&xfilter.col===t.dim&&k!==xfilter.val)return 'rgba(150,150,170,0.2)';
       return base[i];
     });
-    traces=[{type:'pie',labels:keys,values:g.map(d=>+d.val.toFixed(1)),hole:.62,marker:{colors:colors},textinfo:t.showLabels?'label+value':'percent',texttemplate:t.showLabels?keys.map((k,i)=>'%{label}<br>'+fmtCompact(g[i].val)):undefined,textfont:{size:labelSizes(t,keys)},hovertemplate:'%{label}<br>%{value} (%{percent})<extra></extra>',customdata:keys}];
-    layout.margin={l:8,r:8,t:8,b:8};
+    traces=[{type:'pie',labels:keys,values:g.map(d=>+d.val.toFixed(1)),hole:.62,marker:{colors:colors},textinfo:t.showLabels?'label+value':'percent',texttemplate:t.showLabels?keys.map((k,i)=>dispKey(t,k)+'<br>'+fmtCompact(g[i].val)):undefined,textposition:t.showLabels?'outside':'inside',automargin:true,textfont:{size:labelSizes(t,keys)},hovertemplate:keys.map((k,i)=>dispKey(t,k)+'<br>'+(measureLabel(t)?measureLabel(t)+': ':'')+g[i].val.toFixed(1)+' (%{percent})<extra></extra>'),customdata:keys}];
+    layout.margin=t.showLabels?{l:12,r:12,t:14,b:14}:{l:8,r:8,t:8,b:8};
   } else if(t.type==='line'){
     const g=groupAgg(rows,t.dim,t.measure,t.agg);
-    traces=[{type:'scatter',mode:t.showLabels?'lines+markers+text':'lines',x:g.map(d=>d.key),y:g.map(d=>+d.val.toFixed(1)),line:{color:cols[0],width:2.5,shape:'spline'},fill:'tozeroy',fillcolor:'rgba(127,119,221,.12)',text:t.showLabels?g.map(d=>fmtCompact(d.val)):undefined,textposition:'top center',textfont:{size:labelSizes(t,g.map(d=>d.key))},hovertemplate:'%{x}<br>%{y}<extra></extra>'}];
+    const lkeys=g.map(d=>d.key);
+    traces=[{type:'scatter',mode:t.showLabels?'lines+markers+text':'lines',x:lkeys,y:g.map(d=>+d.val.toFixed(1)),line:{color:cols[0],width:2.5,shape:'spline'},fill:'tozeroy',fillcolor:'rgba(127,119,221,.12)',text:t.showLabels?g.map(d=>fmtCompact(d.val)):undefined,textposition:'top center',textfont:{size:labelSizes(t,lkeys)},customdata:lkeys.map(k=>[k,dispKey(t,k)]),hovertemplate:'%{customdata[1]}<br>'+(measureLabel(t)?measureLabel(t)+': ':'')+'%{y}<extra></extra>'}];
+    layout.xaxis=Object.assign({},layout.xaxis,{tickmode:'array',tickvals:lkeys,ticktext:lkeys.map(k=>truncLabel(dispKey(t,k),12))});
   } else if(t.type==='stacked'){
     const seriesKeys=[...new Set(rows.map(r=>String(r[t.series])))].sort();
     const dimKeys=[...new Set(rows.map(r=>String(r[t.dim])))].sort();
@@ -644,11 +689,12 @@ function renderPlot(el,t){
     traces=seriesKeys.map((sk,i)=>{const ys=dimKeys.map(dk=>{
       const sub=rows.filter(r=>String(r[t.dim])===dk&&String(r[t.series])===sk);
       return +aggregate(sub.map(r=>((t.measure!=='__count__')||(t.agg==='unique'))?r[t.measure]:1),(t.measure==='__count__'&&t.agg!=='unique')?'count':t.agg).toFixed(1);
-    });return {type:'bar',name:sk,x:dimKeys,y:ys,marker:{color:cols[i],opacity:op},
+    });return {type:'bar',name:dispKey(t,sk),x:dimKeys,y:ys,marker:{color:cols[i],opacity:op},
       text:t.showLabels?ys.map(v=>v?fmtCompact(v):''):undefined,
       textposition:t.showLabels?'inside':'none',insidetextfont:{size:labelSizeSingle(t,sk,seriesKeys.length),color:'#fff'},
-      customdata:dimKeys,hovertemplate:'%{x} · '+sk+'<br>%{y}<extra></extra>'}});
+      customdata:dimKeys.map(dk=>[dk,dispKey(t,dk)]),hovertemplate:'%{customdata[1]} · '+dispKey(t,sk)+'<br>%{y}<extra></extra>'}});
     layout.barmode='stack';layout.showlegend=true;layout.legend={orientation:'h',y:-0.22,font:{size:9}};layout.margin.b=44;
+    layout.xaxis=Object.assign({},layout.xaxis,{tickmode:'array',tickvals:dimKeys,ticktext:dimKeys.map(k=>truncLabel(dispKey(t,k),12))});
   } else if(t.type==='histogram'){
     traces=[{type:'histogram',x:rows.map(r=>r[t.measure]),nbinsx:t.bins||14,marker:{color:cols[0],line:{color:css('--bg'),width:1}},hovertemplate:'%{x}<br>%{y}<extra></extra>'}];
   } else if(t.type==='box'){
@@ -707,11 +753,38 @@ function defaultTableConfig(){
   const cols=(CAT.concat(NUM)).slice(0,4);
   return {columns:cols.map(c=>({field:c,header:c})),rowLimit:10,overrides:{},sort:null,format:{mode:'magnitude',focusValue:''}};
 }
+// Stable identity for a data row, so cell edits (overrides) follow the row through
+// sorting / filtering / row-limit changes instead of being pinned to a screen position.
+// Prefers the source's own stable id (SharePoint ItemInternalId / __rowNum__); else a
+// content hash of the row's non-meta values.
+function rowKey(r){
+  if(!r||typeof r!=='object')return 'na';
+  if(r.ItemInternalId!=null)return 'id:'+r.ItemInternalId;
+  if(r.__rowNum__!=null)return 'rn:'+r.__rowNum__;
+  let s='';
+  const keys=Object.keys(r).filter(k=>!META_KEYS.includes(k)).sort();
+  for(const k of keys)s+=k+'\u0001'+String(r[k])+'\u0002';
+  // small, fast string hash (djb2)
+  let h=5381;for(let i=0;i<s.length;i++)h=((h<<5)+h+s.charCodeAt(i))>>>0;
+  return 'h:'+h.toString(36);
+}
+// Display name for a category key (rename is display-only; data/filtering use the real key).
+function dispKey(t,k){const m=t.labelNames||{};const v=m[k];return (v!=null&&String(v).trim()!=='')?String(v):String(k);}
+// Custom measure/series name for hover & legend, falling back to a sensible default.
+function measureLabel(t){return (t.measureName&&String(t.measureName).trim()!=='')?String(t.measureName):'';}
+
 function renderTable(el,t){
+  if(el&&el.classList)el.classList.add('has-table');
   if(!t.table)t.table=defaultTableConfig();
   const cfg=t.table;
   if(!cfg.format)cfg.format={mode:'magnitude',focusValue:''};
-  let rows=applyFilters(dateFiltered(),t.filters);
+  // One-time cleanup: legacy overrides were keyed by screen position (ri:ci) and could
+  // display on the wrong row after sort/filter. Drop them; new keys are rowKey|field.
+  if(cfg.overrides&&!cfg._ovMigrated){
+    for(const k of Object.keys(cfg.overrides)){if(/^\d+:\d+$/.test(k))delete cfg.overrides[k];}
+    cfg._ovMigrated=true;
+  }
+  let rows=applyFilters(dateFiltered(),t.filters);rows=excludeEmptyRows(t,rows);
   if(xfilter)rows=rows.filter(r=>String(r[xfilter.col])===xfilter.val);
   const cols=cfg.columns||[];
   // raw value for a given source row + column (pre-override)
@@ -735,13 +808,13 @@ function renderTable(el,t){
   }
   rows=rows.slice(0,cfg.rowLimit||10);
   const cellVal=(ri,ci)=>{
-    const ov=cfg.overrides&&cfg.overrides[ri+':'+ci];
-    if(ov!==undefined)return ov;
+    const f=cols[ci]&&cols[ci].field;
+    const ov=cfg.overrides&&f&&cfg.overrides[rowKey(rows[ri])+'|'+f];
+    if(ov!==undefined&&ov!==null)return ov;
     const v=raw(rows[ri],ci);
     if(v===undefined||v==='')return '';
     // Detected date columns: render as yyyy-mm-dd (matches the date filter format),
     // handling Excel serials and non-ISO strings. Falls back to raw if unparseable.
-    const f=cols[ci]&&cols[ci].field;
     if(f&&DATECOLS.includes(f)){const e=parseDate(v);if(!isNaN(e))return toISOLocal(e);}
     return String(v);
   };
@@ -786,7 +859,7 @@ function renderTable(el,t){
   html+='<th class="th-add"><button class="col-add" title="Add column">+</button></th></tr></thead><tbody>';
   for(let ri=0;ri<rows.length;ri++){
     html+='<tr>';
-    cols.forEach((c,ci)=>{html+='<td style="'+cellStyle(ri,ci)+'"><span class="cell" contenteditable="true" data-ri="'+ri+'" data-ci="'+ci+'" spellcheck="false">'+cellVal(ri,ci)+'</span></td>'});
+    cols.forEach((c,ci)=>{html+='<td style="'+cellStyle(ri,ci)+'"><span class="cell" contenteditable="true" data-ri="'+ri+'" data-ci="'+ci+'" data-rk="'+encodeURIComponent(rowKey(rows[ri]))+'" data-f="'+encodeURIComponent(c.field||'')+'" spellcheck="false">'+cellVal(ri,ci)+'</span></td>'});
     html+='<td class="row-act"><button class="row-del" data-ri="'+ri+'" title="Remove row">×</button></td></tr>';
   }
   html+='</tbody></table></div><div class="tbl-foot"><button class="tbl-btn row-add">+ Add row</button></div>';
@@ -809,7 +882,21 @@ function renderTable(el,t){
     s.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();e.target.blur()}};
   });
   // cell override
-  el.querySelectorAll('.cell').forEach(s=>s.onblur=e=>{const ri=+e.target.dataset.ri,ci=+e.target.dataset.ci;cfg.overrides=cfg.overrides||{};cfg.overrides[ri+':'+ci]=e.target.textContent;scheduleDraft()});
+  el.querySelectorAll('.cell').forEach(s=>s.onblur=e=>{
+    const rk=decodeURIComponent(e.target.dataset.rk||'');
+    const f=decodeURIComponent(e.target.dataset.f||'');
+    if(!rk||!f)return;
+    cfg.overrides=cfg.overrides||{};
+    const ri=+e.target.dataset.ri,ci=+e.target.dataset.ci;
+    const txt=e.target.textContent;
+    const key=rk+'|'+f;
+    // Only persist an override when the text actually differs from the displayed source
+    // value; otherwise clear any stale override so the cell reflects the real data.
+    const sourceDisp=(()=>{const v=raw(rows[ri],ci);if(v===undefined||v==='')return '';if(DATECOLS.includes(f)){const ep=parseDate(v);if(!isNaN(ep))return toISOLocal(ep);}return String(v);})();
+    if(txt===sourceDisp){delete cfg.overrides[key];}
+    else cfg.overrides[key]=txt;
+    scheduleDraft();
+  });
   el.querySelectorAll('.cell').forEach(s=>s.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();e.target.blur()}});
   // remove column
   el.querySelectorAll('.th-del').forEach(b=>b.onclick=ev=>{ev.stopPropagation();const ci=+b.dataset.ci;cfg.columns.splice(ci,1);if(cfg.sort&&cfg.sort.ci>=cfg.columns.length)cfg.sort=null;renderTable(el,t);scheduleDraft()});
@@ -849,21 +936,77 @@ function syncTableHeaderPill(el,t){
 }
 // hex + alpha -> rgba string
 function hexA(hex,a){const m=(hex||'#7F77DD').replace('#','');const r=parseInt(m.slice(0,2),16),g=parseInt(m.slice(2,4),16),b=parseInt(m.slice(4,6),16);return 'rgba('+r+','+g+','+b+','+a+')';}
+// Compute a KPI's aggregated value over an explicit date window [fromISO,toISO],
+// applying the tile's own filters + page filters (but not the active date range).
+function kpiValueForWindow(t,fromISO,toISO){
+  const dc=dateRange.col||'Date';
+  let rows=liveRows();
+  if(fromISO&&toISO){
+    const fromE=parseDate(fromISO),toE=parseDate(toISO)+86399999;
+    rows=rows.filter(r=>{const e=parseDate(r[dc]);return isNaN(e)||(e>=fromE&&e<=toE)});
+  }
+  if(pageFilters.length)rows=rows.filter(r=>pageFilters.every(f=>!f.col||!f.vals||!f.vals.length||f.vals.includes(String(r[f.col]))));
+  rows=applyFilters(rows,t.filters);
+  rows=excludeEmptyRows(t,rows);
+  if(xfilter)rows=rows.filter(r=>String(r[xfilter.col])===xfilter.val);
+  const useCol=(t.measure!=='__count__')||(t.agg==='unique');
+  const vals=rows.map(r=>useCol?r[t.measure]:1);
+  return aggregate(vals,(t.measure==='__count__'&&t.agg!=='unique')?'count':t.agg);
+}
+// The same-length period immediately before the current date range. Returns null if not computable.
+function priorWindow(){
+  const from=activeDateFrom(),to=activeDateTo();
+  if(!from||!to)return null;
+  const fE=parseDate(from),tE=parseDate(to);
+  if(isNaN(fE)||isNaN(tE)||tE<fE)return null;
+  const dayMs=86400000;
+  const lenDays=Math.round((tE-fE)/dayMs)+1; // inclusive span
+  const priorToE=fE-dayMs;
+  const priorFromE=priorToE-(lenDays-1)*dayMs;
+  return {from:toISOLocal(priorFromE),to:toISOLocal(priorToE)};
+}
+// Resolve the comparison reference value for a KPI tile, or null when comparison is off/unavailable.
+function kpiCompareRef(t,currentVal){
+  const mode=t.compareMode;
+  if(mode==='baseline'){
+    const b=parseFloat(t.compareBaseline);
+    return isFinite(b)?b:null;
+  }
+  if(mode==='prior'){
+    const w=priorWindow();
+    if(!w)return null;
+    return kpiValueForWindow(t,w.from,w.to);
+  }
+  if(mode==='custom'){
+    if(!t.compareFrom||!t.compareTo)return null;
+    return kpiValueForWindow(t,t.compareFrom,t.compareTo);
+  }
+  return null;
+}
+
 function renderKpi(el,t){
-  let rows=applyFilters(dateFiltered(),t.filters);
+  let rows=applyFilters(dateFiltered(),t.filters);rows=excludeEmptyRows(t,rows);
   if(xfilter)rows=rows.filter(r=>String(r[xfilter.col])===xfilter.val);
   const useCol=(t.measure!=='__count__')||(t.agg==='unique');
   const vals=rows.map(r=>useCol?r[t.measure]:1);
   let v=aggregate(vals,(t.measure==='__count__'&&t.agg!=='unique')?'count':t.agg);
   const fmt=n=>fmtCompact(n);
   const disp=fmt(v);
-  if(t._delta===undefined)t._delta=(Math.random()*30-8);
-  const up=t._delta>=0;
   const baseSize=t.numSize||28;
   const sizePx=Math.round(baseSize*fscale);
   const accent=t.numAccent?tileColors(t,1)[0]:'';
   const valStyle='font-size:'+sizePx+'px'+(accent?(';color:'+accent):'');
-  let html='<div class="val" style="'+valStyle+'">'+disp+'</div><div class="delta '+(up?'up':'down')+'"><svg class="ico" style="width:13px;height:13px" viewBox="0 0 24 24"><path d="'+(up?'M7 17L17 7M17 7H9M17 7v8':'M7 7l10 10M17 17H9M17 17V9')+'"/></svg>'+Math.abs(t._delta).toFixed(0)+'% vs prior period</div>';
+  let html='<div class="val" style="'+valStyle+'">'+disp+'</div>';
+  // comparison delta — only when a compare mode is active and a reference is available
+  const ref=kpiCompareRef(t,v);
+  if(ref!==null&&ref!==undefined&&isFinite(ref)){
+    const diff=v-ref;
+    const up=diff>=0;
+    const pct=(ref!==0)?(diff/Math.abs(ref)*100):(diff!==0?Infinity:0);
+    const pctTxt=isFinite(pct)?(Math.abs(pct).toFixed(1)+'%'):'—';
+    const refLabel=t.compareMode==='baseline'?'vs baseline':(t.compareMode==='custom'?'vs selected range':'vs prior period');
+    html+='<div class="delta '+(up?'up':'down')+'"><svg class="ico" style="width:13px;height:13px" viewBox="0 0 24 24"><path d="'+(up?'M7 17L17 7M17 7H9M17 7v8':'M7 7l10 10M17 17H9M17 17V9')+'"/></svg>'+(up?'+':'−')+fmt(Math.abs(diff))+' ('+(up?'+':'−')+pctTxt+') '+refLabel+'</div>';
+  }
   // optional dimension breakdown: show each category's value, top highlighted
   if(t.dim&&CAT.includes(t.dim)){
     const g=groupAgg(rows,t.dim,t.measure,t.agg).sort((a,b)=>b.val-a.val);
@@ -913,7 +1056,7 @@ function tileSubHTML(t){
 function tileTotal(t){
   // returns a short total/summary string for the tile header, or '' if not applicable
   try{
-    let rows=applyFilters(dateFiltered(),t.filters);
+    let rows=applyFilters(dateFiltered(),t.filters);rows=excludeEmptyRows(t,rows);
     if(xfilter)rows=rows.filter(r=>String(r[xfilter.col])===xfilter.val);
     const fmt=n=>fmtCompact(n);
     if(['bar','pie','line','stacked'].includes(t.type)){
@@ -932,22 +1075,24 @@ function tileTotal(t){
   }catch(e){}
   return '';
 }
+function buildTileNode(t){
+  const d=document.createElement('div');d.className='tile';d.dataset.id=t.id;
+  d.style.gridColumn='span '+t.w;d.style.gridRow='span '+t.h;
+  if(t.type==='kpi')d.classList.add('kpi');
+  let sub=t.type==='kpi'?'':tileSubHTML(t);
+  d.innerHTML='<div class="tile-head"><div><div class="tile-title">'+t.title+'</div>'+(t.type!=='kpi'?'<div class="tile-sub">'+sub+'</div>':(sub?'<div class="tile-sub">'+sub+'</div>':''))+'</div><div class="tile-menu"><button class="tmbtn dup" title="Duplicate tile"><svg class="ico" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button><button class="tmbtn cfg" title="Configure"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 15a1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg></button></div></div>'+(t.type==='kpi'?'<div class="kpibody"></div>':'<div class="plot"></div>')+'<div class="resize-h"><svg class="ico" style="width:14px;height:14px" viewBox="0 0 24 24"><path d="M22 22L2 22M22 22L22 2M22 22l-7-7"/></svg></div>';
+  if(t.type==='kpi')renderKpi(d.querySelector('.kpibody'),t);
+  else renderPlot(d.querySelector('.plot'),t);
+  d.querySelector('.cfg').onclick=e=>{e.stopPropagation();openDrawer(t.id)};
+  const dupb=d.querySelector('.dup');if(dupb)dupb.onclick=e=>{e.stopPropagation();duplicateTile(t.id)};
+  attachDrag(d,t);
+  attachResize(d,t);
+  return d;
+}
 function render(){
   const grid=document.getElementById('grid');grid.innerHTML='';
-  if(!tiles.length){grid.innerHTML='<div class="empty">No tiles yet — click “Add tile”.</div>'}
-  tiles.forEach(t=>{
-    const d=document.createElement('div');d.className='tile';d.dataset.id=t.id;
-    d.style.gridColumn='span '+t.w;d.style.gridRow='span '+t.h;
-    if(t.type==='kpi')d.classList.add('kpi');
-    let sub=t.type==='kpi'?'':tileSubHTML(t);
-    d.innerHTML='<div class="tile-head"><div><div class="tile-title">'+t.title+'</div>'+(t.type!=='kpi'?'<div class="tile-sub">'+sub+'</div>':(sub?'<div class="tile-sub">'+sub+'</div>':''))+'</div><div class="tile-menu"><button class="tmbtn cfg" title="Configure"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 15a1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg></button></div></div>'+(t.type==='kpi'?'<div class="kpibody"></div>':'<div class="plot"></div>')+'<div class="resize-h"><svg class="ico" style="width:14px;height:14px" viewBox="0 0 24 24"><path d="M22 22L2 22M22 22L22 2M22 22l-7-7"/></svg></div>';
-    grid.appendChild(d);
-    if(t.type==='kpi')renderKpi(d.querySelector('.kpibody'),t);
-    else renderPlot(d.querySelector('.plot'),t);
-    d.querySelector('.cfg').onclick=e=>{e.stopPropagation();openDrawer(t.id)};
-    attachDrag(d,t);
-    attachResize(d,t);
-  });
+  if(!tiles.length){grid.innerHTML='<div class="empty">No tiles yet — click “Add tile”.</div>';return}
+  tiles.forEach(t=>grid.appendChild(buildTileNode(t)));
 }
 /* ---------- hold-to-lift drag: cursor-follow + live reorder ----------
    Key fixes vs prior version:
@@ -1084,6 +1229,19 @@ function attachResize(el,t){
 
 /* ---------- drawer / config (same adaptive engine + per-series colors) ---------- */
 function openDrawer(id){editingId=id;draft=JSON.parse(JSON.stringify(tiles.find(t=>t.id===id)));normalizeDraft();buildDrawer();document.getElementById('drawer').classList.add('open');document.getElementById('scrim').classList.add('open')}
+// Live preview: re-render the tile being edited from the current draft, without committing.
+// rAF-debounced so dragging a slider updates smoothly.
+let _previewRaf=0;
+function previewTile(){
+  if(!editingId||!draft)return;
+  if(_previewRaf)cancelAnimationFrame(_previewRaf);
+  _previewRaf=requestAnimationFrame(()=>{
+    _previewRaf=0;
+    const el=document.querySelector('.tile[data-id="'+editingId+'"]');if(!el)return;
+    if(draft.type==='kpi'){const kb=el.querySelector('.kpibody');if(kb)renderKpi(kb,draft);}
+    else {const pl=el.querySelector('.plot');if(pl){renderPlot(pl,draft);if(draft.type!=='table')Plotly.Plots.resize(pl);}}
+  });
+}
 function closeDrawer(){if(document.getElementById('miniPop'))closeMoreSettings();document.getElementById('drawer').classList.remove('open');document.getElementById('scrim').classList.remove('open');editingId=null;draft=null}
 function opt(arr,sel){return arr.map(o=>'<option value="'+o+'"'+(o===sel?' selected':'')+'>'+o+'</option>').join('')}
 function buildDrawer(){
@@ -1113,6 +1271,8 @@ function toggleMoreSettings(){
   const isBarPie=(t.type==='bar'||t.type==='pie');
   const p=document.createElement('div');p.className='mini-pop';p.id='miniPop';
   let h='<div style="font-size:14px;font-weight:600;margin-bottom:12px">More settings</div>';
+  h+='<div class="checkbox-row'+(t.excludeEmpty?' on':'')+'" id="ms_excludeempty"><span class="checkbox-box"><svg class="ico" style="width:13px;height:13px;stroke:#fff" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></span>Exclude empty values</div>';
+  h+='<div style="font-size:10.5px;color:var(--text3);margin:0 0 10px 30px">Drops blank rows and recalculates.</div>';
   if(t.type!=='kpi'){
     // Data labels toggle (all chart types)
     h+='<div class="checkbox-row'+(t.showLabels?' on':'')+'" id="ms_labels"><span class="checkbox-box"><svg class="ico" style="width:13px;height:13px;stroke:#fff" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></span>Show data labels</div>';
@@ -1121,7 +1281,8 @@ function toggleMoreSettings(){
     const _catChart=['bar','pie','line','stacked'].includes(t.type);
     if(_catChart){
       h+='<div id="ms_autofitwrap" style="display:'+(t.showLabels?'flex':'none')+';align-items:center;justify-content:space-between;margin:4px 0 4px 30px"><div><div style="font-size:12.5px;color:var(--text)">Auto-fit to tile</div><div style="font-size:10.5px;color:var(--text3)">Shrinks labels so none clip</div></div><div class="checkbox-row'+(t.autoFitLabels?' on':'')+'" id="ms_autofit" style="margin:0;padding:5px 8px"><span class="checkbox-box"><svg class="ico" style="width:13px;height:13px;stroke:#fff" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></span></div></div>';
-      h+='<div id="ms_overrides" style="display:'+(t.showLabels?'block':'none')+';margin:8px 0 2px 30px"><label style="text-transform:none;letter-spacing:0;color:var(--text3);font-size:11px;display:block;margin-bottom:6px">Per-label size overrides</label><div id="ms_ovlist"></div></div>';
+      h+='<div id="ms_overrides" style="display:'+(t.showLabels?'block':'none')+';margin:8px 0 2px 30px"><label style="text-transform:none;letter-spacing:0;color:var(--text3);font-size:11px;display:block;margin-bottom:6px">Label names &amp; sizes</label><div id="ms_ovlist"></div></div>';
+      h+='<div style="margin:10px 0 2px 30px"><label style="text-transform:none;letter-spacing:0;color:var(--text3);font-size:11px;display:block;margin-bottom:6px">Series / measure name</label><input type="text" id="ms_measurename" value="'+(t.measureName||'').replace(/"/g,'&quot;')+'" placeholder="e.g. Sessions" style="width:100%;font-size:12px;padding:7px 9px"></div>';
     }
     // Totals checkbox — ONLY for bar/pie (visual graphs)
     if(isBarPie){
@@ -1130,18 +1291,32 @@ function toggleMoreSettings(){
     } else {
       h+='<div style="font-size:11px;color:var(--text3);margin:2px 0 8px 30px">Header total is available for bar &amp; pie tiles.</div>';
     }
+    // Goal / target lines — bar only
+    if(t.type==='bar'){
+      h+='<div style="border-top:0.5px solid var(--border);margin-top:10px;padding-top:10px"></div>';
+      h+='<div class="checkbox-row'+(t.showGoal?' on':'')+'" id="ms_goal"><span class="checkbox-box"><svg class="ico" style="width:13px;height:13px;stroke:#fff" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></span>Show goal / target lines</div>';
+      h+='<div id="ms_goalbox" style="display:'+(t.showGoal?'block':'none')+';margin:6px 0 2px 30px">';
+      h+='<label style="text-transform:none;letter-spacing:0;color:var(--text3);font-size:11px;display:block;margin-bottom:6px">Global goal (all bars)</label><input type="number" id="ms_goalvalue" value="'+(t.goalValue!=null?t.goalValue:'')+'" placeholder="e.g. 50" style="width:100%;font-size:12px;padding:7px 9px;margin-bottom:10px">';
+      h+='<label style="text-transform:none;letter-spacing:0;color:var(--text3);font-size:11px;display:block;margin-bottom:6px">Per-bar goal overrides</label><div id="ms_goallist"></div>';
+      h+='</div>';
+    }
   }
   // Filters (this tile) — for all tile types
   h+='<div style="border-top:0.5px solid var(--border);margin-top:12px;padding-top:12px"><label style="font-size:11.5px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:8px">Filters (this tile)</label><div class="filter-list" id="filterList"></div><span class="chip add" id="addFilter"><svg class="ico" style="width:13px;height:13px" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Add filter</span></div>';
   p.innerHTML=h;
   document.getElementById('drawer').appendChild(p);
   // bind
-  const lb=document.getElementById('ms_labels');if(lb)lb.onclick=()=>{draft.showLabels=!draft.showLabels;lb.classList.toggle('on',draft.showLabels);['ms_labelsize','ms_autofitwrap','ms_overrides'].forEach(id=>{const w=document.getElementById(id);if(w)w.style.display=draft.showLabels?(id==='ms_autofitwrap'?'flex':'block'):'none'})};
-  const ls=document.getElementById('ms_lsize');if(ls)ls.oninput=e=>{draft.labelSize=+e.target.value;const o=document.getElementById('ms_lsizeout');if(o)o.textContent=e.target.value+'px'};
-  const af2=document.getElementById('ms_autofit');if(af2)af2.onclick=()=>{draft.autoFitLabels=!draft.autoFitLabels;af2.classList.toggle('on',draft.autoFitLabels)};
+  const lb=document.getElementById('ms_labels');if(lb)lb.onclick=()=>{draft.showLabels=!draft.showLabels;lb.classList.toggle('on',draft.showLabels);['ms_labelsize','ms_autofitwrap','ms_overrides'].forEach(id=>{const w=document.getElementById(id);if(w)w.style.display=draft.showLabels?(id==='ms_autofitwrap'?'flex':'block'):'none'});previewTile()};
+  const xe=document.getElementById('ms_excludeempty');if(xe)xe.onclick=()=>{draft.excludeEmpty=!draft.excludeEmpty;xe.classList.toggle('on',draft.excludeEmpty);previewTile()};
+  const ls=document.getElementById('ms_lsize');if(ls)ls.oninput=e=>{draft.labelSize=+e.target.value;const o=document.getElementById('ms_lsizeout');if(o)o.textContent=e.target.value+'px';previewTile()};
+  const af2=document.getElementById('ms_autofit');if(af2)af2.onclick=()=>{draft.autoFitLabels=!draft.autoFitLabels;af2.classList.toggle('on',draft.autoFitLabels);previewTile()};
+  const mn=document.getElementById('ms_measurename');if(mn)mn.oninput=e=>{draft.measureName=e.target.value;previewTile()};
+  const gl=document.getElementById('ms_goal');if(gl)gl.onclick=()=>{draft.showGoal=!draft.showGoal;gl.classList.toggle('on',draft.showGoal);const w=document.getElementById('ms_goalbox');if(w)w.style.display=draft.showGoal?'block':'none';if(draft.showGoal)renderGoalList();previewTile()};
+  const gv=document.getElementById('ms_goalvalue');if(gv)gv.oninput=e=>{draft.goalValue=e.target.value;previewTile()};
+  renderGoalList();
   renderOverrideList();
-  const tt=document.getElementById('ms_total');if(tt)tt.onclick=()=>{draft.showTotal=!draft.showTotal;tt.classList.toggle('on',draft.showTotal);const w=document.getElementById('ms_totalsize');if(w)w.style.display=draft.showTotal?'block':'none'};
-  const ts=document.getElementById('ms_tsize');if(ts)ts.oninput=e=>{draft.totalSize=+e.target.value;const o=document.getElementById('ms_tsizeout');if(o)o.textContent=e.target.value+'px'};
+  const tt=document.getElementById('ms_total');if(tt)tt.onclick=()=>{draft.showTotal=!draft.showTotal;tt.classList.toggle('on',draft.showTotal);const w=document.getElementById('ms_totalsize');if(w)w.style.display=draft.showTotal?'block':'none';previewTile()};
+  const ts=document.getElementById('ms_tsize');if(ts)ts.oninput=e=>{draft.totalSize=+e.target.value;const o=document.getElementById('ms_tsizeout');if(o)o.textContent=e.target.value+'px';previewTile()};
   const af=document.getElementById('addFilter');if(af)af.onclick=()=>{draft.filters.push({col:(CAT[0]||COLS[0]||''),vals:[]});renderFilters()};
   renderFilters();
   setTimeout(()=>document.addEventListener('pointerdown',_msOutside,true),0);
@@ -1159,31 +1334,62 @@ function labelKeysFor(t){
   if(t.type==='line')return [...new Set(dateFiltered().map(r=>String(r[t.dim])))].sort();
   return seriesKeysFor(t);
 }
+function renderGoalList(){
+  const list=document.getElementById('ms_goallist');if(!list)return;
+  const t=draft;
+  if(t.type!=='bar'){list.innerHTML='';return}
+  const keys=labelKeysFor(t).slice(0,40);
+  if(!keys.length){list.innerHTML='<div style="font-size:11px;color:var(--text3)">No bars to target individually.</div>';return}
+  t.goalOverrides=t.goalOverrides||{};
+  list.innerHTML=keys.map(k=>{
+    const ke=k.replace(/"/g,'&quot;');
+    const gv=(t.goalOverrides[k]!=null)?String(t.goalOverrides[k]).replace(/"/g,'&quot;'):'';
+    return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:7px"><span title="'+ke+'" style="flex:1;font-size:11.5px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+k+'</span>'+
+      '<input type="number" class="ms-goal" data-k="'+ke+'" value="'+gv+'" placeholder="global" style="width:90px;font-size:11.5px;padding:5px 8px"></div>';
+  }).join('');
+  list.querySelectorAll('.ms-goal').forEach(inp=>inp.oninput=e=>{
+    const k=e.target.dataset.k;const v=e.target.value;
+    if(v!==''&&isFinite(parseFloat(v)))draft.goalOverrides[k]=parseFloat(v); else delete draft.goalOverrides[k];
+    previewTile();
+  });
+}
 function renderOverrideList(){
   const list=document.getElementById('ms_ovlist');if(!list)return;
   const t=draft;
   const keys=labelKeysFor(t).slice(0,40); // cap for very high-cardinality dims
   if(!keys.length){list.innerHTML='<div style="font-size:11px;color:var(--text3)">No categories to size individually.</div>';return}
   t.labelOverrides=t.labelOverrides||{};
+  t.labelNames=t.labelNames||{};
   const base=t.labelSize||(t.type==='stacked'?12:13);
   list.innerHTML=keys.map(k=>{
     const ov=t.labelOverrides[k];
     const val=(ov!=null)?ov:base;
     const lab=(ov!=null)?(ov+'px'):'auto';
     const ke=k.replace(/"/g,'&quot;');
-    return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px"><span title="'+ke+'" style="flex:1;font-size:11.5px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+k+'</span>'+
-      '<input type="range" class="ms-ov" data-k="'+ke+'" min="9" max="40" step="1" value="'+val+'" style="width:120px">'+
-      '<span class="ms-ovout" data-k="'+ke+'" style="font-size:10.5px;color:var(--text3);min-width:34px;text-align:right">'+lab+'</span>'+
-      '<span class="ms-ovreset" data-k="'+ke+'" title="Reset to auto" style="cursor:pointer;color:var(--text3);display:'+(ov!=null?'inline-flex':'none')+'"><svg class="ico" style="width:13px;height:13px" viewBox="0 0 24 24"><path d="M3 12a9 9 0 109-9 9 9 0 00-7 3.3M3 4v4h4"/></svg></span></div>';
+    const nm=(t.labelNames[k]!=null)?String(t.labelNames[k]).replace(/"/g,'&quot;'):'';
+    return '<div style="margin-bottom:10px">'+
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px"><span title="'+ke+'" style="flex:none;width:30%;font-size:11.5px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+k+'</span>'+
+        '<input type="text" class="ms-ovname" data-k="'+ke+'" value="'+nm+'" placeholder="Rename label…" style="flex:1;font-size:11.5px;padding:5px 8px"></div>'+
+      '<div style="display:flex;align-items:center;gap:8px;padding-left:30%">'+
+        '<input type="range" class="ms-ov" data-k="'+ke+'" min="9" max="40" step="1" value="'+val+'" style="flex:1">'+
+        '<span class="ms-ovout" data-k="'+ke+'" style="font-size:10.5px;color:var(--text3);min-width:34px;text-align:right">'+lab+'</span>'+
+        '<span class="ms-ovreset" data-k="'+ke+'" title="Reset size to auto" style="cursor:pointer;color:var(--text3);display:'+(ov!=null?'inline-flex':'none')+'"><svg class="ico" style="width:13px;height:13px" viewBox="0 0 24 24"><path d="M3 12a9 9 0 109-9 9 9 0 00-7 3.3M3 4v4h4"/></svg></span></div>'+
+      '</div>';
   }).join('');
+  list.querySelectorAll('.ms-ovname').forEach(inp=>inp.oninput=e=>{
+    const k=e.target.dataset.k;const v=e.target.value;
+    if(v&&v.trim()!=='')draft.labelNames[k]=v; else delete draft.labelNames[k];
+    previewTile();
+  });
   list.querySelectorAll('.ms-ov').forEach(r=>r.oninput=e=>{
     const k=e.target.dataset.k;draft.labelOverrides[k]=+e.target.value;
-    const row=e.target.closest('div');
-    const o=row&&row.querySelector('.ms-ovout');if(o)o.textContent=e.target.value+'px';
-    const rs=row&&row.querySelector('.ms-ovreset');if(rs)rs.style.display='inline-flex';
+    const wrap=e.target.closest('div');
+    const o=wrap&&wrap.querySelector('.ms-ovout');if(o)o.textContent=e.target.value+'px';
+    const rs=wrap&&wrap.querySelector('.ms-ovreset');if(rs)rs.style.display='inline-flex';
+    previewTile();
   });
   list.querySelectorAll('.ms-ovreset').forEach(b=>b.onclick=()=>{
-    const k=b.dataset.k;delete draft.labelOverrides[k];renderOverrideList();
+    const k=b.dataset.k;delete draft.labelOverrides[k];renderOverrideList();previewTile();
   });
 }
 function seriesKeysFor_unused(){}
@@ -1240,6 +1446,16 @@ function normalizeDraft(){
   if(!t.sankeyCols||!t.sankeyCols.length)t.sankeyCols=defaults.sankeyCols;
   if(t.autoFitLabels===undefined)t.autoFitLabels=true;
   if(!t.labelOverrides||typeof t.labelOverrides!=='object')t.labelOverrides={};
+  if(!t.labelNames||typeof t.labelNames!=='object')t.labelNames={};
+  if(t.measureName===undefined)t.measureName='';
+  if(t.compareMode===undefined)t.compareMode='off';
+  if(t.compareBaseline===undefined)t.compareBaseline='';
+  if(t.compareFrom===undefined)t.compareFrom='';
+  if(t.compareTo===undefined)t.compareTo='';
+  if(t.showGoal===undefined)t.showGoal=false;
+  if(t.goalValue===undefined)t.goalValue='';
+  if(!t.goalOverrides||typeof t.goalOverrides!=='object')t.goalOverrides={};
+  if(t.excludeEmpty===undefined)t.excludeEmpty=false;
 }
 function adaptiveFields(t){
   const measOpts=['__count__'].concat(NUM);
@@ -1250,7 +1466,11 @@ function adaptiveFields(t){
   if(t.type==='kpi'){h+='<div class="field"><label>Measure</label>'+measSelect('f_measure',t.measure)+'</div>'+aggField;
     h+='<div class="field"><label>Breakdown dimension (optional)</label><select id="f_kpidim"><option value="">None — single number</option>'+opt(CAT.filter(c=>c!=='Date'),t.dim||'')+'</select></div>';
     h+='<div class="field"><label>Number size</label><div style="display:flex;align-items:center;gap:10px"><input type="range" id="f_numsize" min="18" max="72" step="1" value="'+(t.numSize||28)+'" style="flex:1"><span id="numsizeOut" style="font-size:12.5px;color:var(--text2);min-width:42px;text-align:right">'+(t.numSize||28)+'px</span></div></div>';
-    h+='<div class="field"><label>Number color</label><div class="seg" id="numaccentSeg"><button data-v="0" class="'+(t.numAccent?'':'on')+'">Default</button><button data-v="1" class="'+(t.numAccent?'on':'')+'">Accent</button></div></div>'}
+    h+='<div class="field"><label>Number color</label><div class="seg" id="numaccentSeg"><button data-v="0" class="'+(t.numAccent?'':'on')+'">Default</button><button data-v="1" class="'+(t.numAccent?'on':'')+'">Accent</button></div></div>';
+    const cm=t.compareMode||'off';
+    h+='<div class="field"><label>Compare to prior</label><div class="seg" id="cmpSeg"><button data-v="off" class="'+(cm==='off'?'on':'')+'">Off</button><button data-v="prior" class="'+(cm==='prior'?'on':'')+'">Prior</button><button data-v="baseline" class="'+(cm==='baseline'?'on':'')+'">Baseline</button><button data-v="custom" class="'+(cm==='custom'?'on':'')+'">Custom</button></div></div>';
+    h+='<div class="field" id="cmpBaseWrap" style="display:'+(cm==='baseline'?'block':'none')+'"><label>Baseline value</label><input type="number" id="f_baseline" value="'+(t.compareBaseline!=null?t.compareBaseline:'')+'" placeholder="e.g. 1200"></div>';
+    h+='<div class="field" id="cmpCustomWrap" style="display:'+(cm==='custom'?'block':'none')+'"><label>Comparison date range</label><div style="display:flex;flex-direction:column;gap:8px"><div style="display:flex;align-items:center;gap:8px"><span style="font-size:11px;color:var(--text3);width:30px;flex:none">From</span><input type="date" id="f_cmpfrom" value="'+(t.compareFrom||'')+'" style="font-size:12.5px;padding:8px 10px;flex:1;min-width:0"></div><div style="display:flex;align-items:center;gap:8px"><span style="font-size:11px;color:var(--text3);width:30px;flex:none">To</span><input type="date" id="f_cmpto" value="'+(t.compareTo||'')+'" style="font-size:12.5px;padding:8px 10px;flex:1;min-width:0"></div></div></div>'}
   else if(t.type==='bar'||t.type==='line'||t.type==='pie'){h+='<div class="field"><label>Dimension</label><select id="f_dim">'+opt(CAT,t.dim)+'</select></div><div class="field"><label>Measure</label>'+measSelect('f_measure',t.measure)+'</div>'+aggField}
   else if(t.type==='stacked'||t.type==='heatmap'){h+='<div class="field"><label>Dimension (rows)</label><select id="f_dim">'+opt(CAT.filter(c=>c!=='Date'),t.dim)+'</select></div><div class="field"><label>Series / columns</label><select id="f_series">'+opt(CAT.filter(c=>c!=='Date'),t.series)+'</select></div><div class="field"><label>Measure</label>'+measSelect('f_measure',t.measure)+'</div>'+aggField}
   else if(t.type==='histogram'){h+='<div class="field"><label>Measure</label>'+measSelect('f_measure',t.measure,true)+'</div><div class="field"><label>Bins</label><input type="number" id="f_bins" min="4" max="40" value="'+(t.bins||14)+'"></div>'}
@@ -1279,8 +1499,12 @@ function bindAdaptive(){
   if(g('f_color'))g('f_color').onchange=e=>{draft.color=e.target.value;renderSeriesColors()};
   if(g('f_bins'))g('f_bins').oninput=e=>draft.bins=+e.target.value;
   if(g('f_kpidim'))g('f_kpidim').onchange=e=>{draft.dim=e.target.value;};
-  if(g('f_numsize'))g('f_numsize').oninput=e=>{draft.numSize=+e.target.value;const o=g('numsizeOut');if(o)o.textContent=e.target.value+'px'};
+  if(g('f_numsize'))g('f_numsize').oninput=e=>{draft.numSize=+e.target.value;const o=g('numsizeOut');if(o)o.textContent=e.target.value+'px';previewTile()};
   if(g('numaccentSeg'))g('numaccentSeg').querySelectorAll('button').forEach(b=>b.onclick=()=>{draft.numAccent=b.dataset.v==='1';g('numaccentSeg').querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on')});
+  if(g('cmpSeg'))g('cmpSeg').querySelectorAll('button').forEach(b=>b.onclick=()=>{draft.compareMode=b.dataset.v;g('cmpSeg').querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on');const bw=g('cmpBaseWrap');if(bw)bw.style.display=(b.dataset.v==='baseline')?'block':'none';const cw=g('cmpCustomWrap');if(cw)cw.style.display=(b.dataset.v==='custom')?'block':'none';previewTile()});
+  if(g('f_baseline'))g('f_baseline').oninput=e=>{draft.compareBaseline=e.target.value;previewTile()};
+  if(g('f_cmpfrom'))g('f_cmpfrom').onchange=e=>{draft.compareFrom=e.target.value;previewTile()};
+  if(g('f_cmpto'))g('f_cmpto').onchange=e=>{draft.compareTo=e.target.value;previewTile()};
   if(g('labelSeg'))g('labelSeg').querySelectorAll('button').forEach(b=>b.onclick=()=>{draft.showLabels=b.dataset.v==='1';g('labelSeg').querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on')});
   if(g('totalSeg'))g('totalSeg').querySelectorAll('button').forEach(b=>b.onclick=()=>{draft.showTotal=b.dataset.v==='1';g('totalSeg').querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on');const w=g('totalSizeWrap');if(w)w.style.display=draft.showTotal?'block':'none'});
   if(g('f_totalsize'))g('f_totalsize').oninput=e=>{draft.totalSize=+e.target.value;const o=g('totalsizeOut');if(o)o.textContent=e.target.value+'px'};
@@ -1300,7 +1524,13 @@ function renderFilters(){
   });
   list.querySelectorAll('.ffcol').forEach(s=>s.onchange=e=>{const i=+e.target.dataset.i;draft.filters[i].col=e.target.value;draft.filters[i].vals=[];renderFilters()});
   list.querySelectorAll('.fi-head .x').forEach(x=>x.onclick=e=>{const i=+e.currentTarget.dataset.i;draft.filters.splice(i,1);renderFilters()});
-  list.querySelectorAll('.vchip').forEach(c=>c.onclick=e=>{const i=+c.dataset.i,v=c.dataset.v;const f=draft.filters[i];const k=f.vals.indexOf(v);if(k>=0)f.vals.splice(k,1);else f.vals.push(v);renderFilters()});
+  list.querySelectorAll('.vchip').forEach(c=>c.onclick=e=>{
+    const i=+c.dataset.i,v=c.dataset.v;const f=draft.filters[i];const k=f.vals.indexOf(v);
+    const on=(k<0);
+    if(on)f.vals.push(v); else f.vals.splice(k,1);
+    if(on){c.style.borderColor='var(--accent)';c.style.color='var(--accent)';c.style.opacity='1';}
+    else {c.style.borderColor='';c.style.color='';c.style.opacity='.6';}
+  });
 }
 function applyDraft(){
   const i=tiles.findIndex(t=>t.id===editingId);
@@ -1326,7 +1556,37 @@ function applyDraft(){
 }
 
 document.getElementById('applyTile').onclick=applyDraft;
-document.getElementById('deleteTile').onclick=()=>{tiles=tiles.filter(t=>t.id!==editingId);closeDrawer();render();scheduleDraft()};
+document.getElementById('deleteTile').onclick=()=>{
+  const id=editingId;
+  tiles=tiles.filter(t=>t.id!==id);
+  closeDrawer();
+  // Surgical DOM removal: drop just this tile's node so scroll position is preserved.
+  const grid=document.getElementById('grid');
+  const node=grid&&grid.querySelector('.tile[data-id="'+id+'"]');
+  if(node)node.remove();
+  if(!tiles.length&&grid)grid.innerHTML='<div class="empty">No tiles yet — click “Add tile”.</div>';
+  scheduleDraft();
+};
+// Duplicate a tile: deep-clone, fresh id, " (copy)" title, insert right after the original.
+function duplicateTile(id){
+  const i=tiles.findIndex(t=>t.id===id);
+  if(i<0)return null;
+  const copy=JSON.parse(JSON.stringify(tiles[i]));
+  copy.id=uid();
+  copy.title=(copy.title||'Tile')+' (copy)';
+  tiles.splice(i+1,0,copy);
+  // Surgical DOM insert: add only the new tile node right after the original,
+  // so the page scroll position stays put (no full grid rebuild).
+  const grid=document.getElementById('grid');
+  const origNode=grid&&grid.querySelector('.tile[data-id="'+id+'"]');
+  const node=buildTileNode(copy);
+  if(grid&&origNode)grid.insertBefore(node,origNode.nextSibling);
+  else if(grid)grid.appendChild(node);
+  scheduleDraft();
+  return copy.id;
+}
+const _dupBtn=document.getElementById('duplicateTile');
+if(_dupBtn)_dupBtn.onclick=()=>{const id=editingId;if(!id)return;closeDrawer();const nid=duplicateTile(id);if(nid)openDrawer(nid)};
 document.getElementById('closeDrawer').onclick=closeDrawer;
 document.getElementById('scrim').onclick=closeDrawer;
 function defaultDim(){return CAT[0]||COLS[0]||'';}
@@ -1334,9 +1594,14 @@ function defaultMeasure(){return NUM[0]||'__count__';}
 document.getElementById('addBtn').onclick=()=>{
   const t={id:uid(),type:'bar',title:'New tile',dim:defaultDim(),measure:'__count__',agg:'count',filters:[],w:6,h:5};
   tiles.unshift(t); // add to the top so it's immediately visible
-  render();
+  // Surgical insert at the top of the grid (no full rebuild).
+  const grid=document.getElementById('grid');
+  if(grid){
+    const empty=grid.querySelector('.empty');if(empty)empty.remove();
+    grid.insertBefore(buildTileNode(t),grid.firstChild);
+  }
   scheduleDraft();
-  // scroll the new tile into view, then open its config
+  // scroll the new tile into view, then open its config (intended for Add)
   requestAnimationFrame(()=>{
     const node=document.querySelector('.tile[data-id="'+t.id+'"]');
     if(node)node.scrollIntoView({behavior:'smooth',block:'center'});
@@ -1424,7 +1689,14 @@ document.getElementById('filtersBtn').onclick=()=>{
       });
       list.querySelectorAll('.pfcol').forEach(s=>s.onchange=e=>{const i=+e.target.dataset.i;draftPF[i].col=e.target.value;draftPF[i].vals=[];drawList()});
       list.querySelectorAll('.fi-head .x').forEach(x=>x.onclick=e=>{draftPF.splice(+e.currentTarget.dataset.i,1);drawList()});
-      list.querySelectorAll('.pfv').forEach(c=>c.onclick=()=>{const i=+c.dataset.i,v=c.dataset.v;const arr=draftPF[i].vals;const k=arr.indexOf(v);if(k>=0)arr.splice(k,1);else arr.push(v);drawList()});
+      list.querySelectorAll('.pfv').forEach(c=>c.onclick=()=>{
+        const i=+c.dataset.i,v=c.dataset.v;const arr=draftPF[i].vals;const k=arr.indexOf(v);
+        const on=(k<0);
+        if(on)arr.push(v); else arr.splice(k,1);
+        // toggle just this chip's styling in place — no list rebuild, so no flash
+        if(on){c.style.borderColor='var(--accent)';c.style.color='var(--accent)';c.style.opacity='1';}
+        else {c.style.borderColor='';c.style.color='';c.style.opacity='.6';}
+      });
     }
     drawList();
     p.querySelector('#pf-add').onclick=()=>{draftPF.push({col:catCols[0],vals:[]});drawList()};
@@ -1889,7 +2161,16 @@ try{
   }
 }catch(e){}
 if(!_restored){seed();setDateLabel();render();setTheme('dark');}
+setDatasetLabel(); // reflect the actual active dataset (restore sets activeDatasetId after init's first call)
 loadDataset(activeDatasetId,false);
+// Charts can render truncated on first paint if the tile container hasn't reached its
+// final size yet (grid/flex layout + font/CDN settling). Force Plotly to re-measure in a
+// few passes once the layout is stable — same effect the user gets by resizing a tile.
+function resizeAllPlots(){document.querySelectorAll('.plot').forEach(p=>{try{Plotly.Plots.resize(p)}catch(e){}});}
+[60,200,500,1000].forEach(ms=>setTimeout(resizeAllPlots,ms));
+requestAnimationFrame(()=>requestAnimationFrame(resizeAllPlots));
+window.addEventListener('load',resizeAllPlots);
+if(document.fonts&&document.fonts.ready)document.fonts.ready.then(resizeAllPlots);
 window.addEventListener('resize',()=>{document.querySelectorAll('.plot').forEach(p=>Plotly.Plots.resize(p))});
 </script>
 </body>
