@@ -903,7 +903,7 @@ async function switchDatasetThenRender(id){
   setTheme(theme);render();
 }
 
-// Save sends a POST as text/plain to avoid the CORS preflight (OPTIONS) problem.
+// Save sends a POST as application/json (matches the flow's JSON body validation).
 async function saveDashboard(isShared){
   const name=getState().name;
   if(!currentDashId)currentDashId='d'+Date.now()+Math.random().toString(36).slice(2,6);
@@ -915,7 +915,7 @@ async function saveDashboard(isShared){
   };
   if(body.configJSON.length>30000){setStatus('err','Config is large ('+body.configJSON.length+' chars). Approaching the Excel cell limit — consider fewer tiles.');}
   try{
-    const res=await fetch(SAVE_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(body)});
+    const res=await fetch(SAVE_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     if(!res.ok)throw new Error('HTTP '+res.status);
     setStatus('ok',(isShared?'Published':'Saved')+' “'+name+'” · '+new Date().toLocaleTimeString());
     return true;
@@ -934,8 +934,9 @@ function scheduleDraft(){
 }
 
 async function listDashboards(){
-  const url=LOAD_URL+(LOAD_URL.includes('ownerId=')?'':('&ownerId='+encodeURIComponent(ownerId())));
-  const res=await fetch(url,{method:'GET'});
+  // Use the signed URL exactly as issued — appending params after sig= invalidates it (400).
+  // The client filters rows by owner/shared after fetching.
+  const res=await fetch(LOAD_URL,{method:'GET'});
   if(!res.ok)throw new Error('HTTP '+res.status);
   const txt=await res.text();let payload;try{payload=JSON.parse(txt)}catch(e){throw new Error('Load response not JSON')}
   return extractRows(payload);
