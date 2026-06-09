@@ -453,6 +453,8 @@ function parseDate(v){
 function isDateValue(v){return !isNaN(parseDate(v))}
 // to ISO yyyy-mm-dd for date inputs
 function toISO(epoch){if(isNaN(epoch))return '';const d=new Date(epoch);return d.toISOString().slice(0,10)}
+// Local-time yyyy-mm-dd (date-only values shouldn't shift a day via UTC conversion).
+function toISOLocal(epoch){if(isNaN(epoch))return '';const d=new Date(epoch);const p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}
 function dateBounds(){
   const dc=dateRange.col||'Date';
   const eps=liveRows().map(r=>parseDate(r[dc])).filter(e=>!isNaN(e)).sort((a,b)=>a-b);
@@ -717,11 +719,17 @@ function renderTable(el,t){
   // sort the underlying rows if a sort is set
   if(cfg.sort&&cols[cfg.sort.ci]){
     const ci=cfg.sort.ci,dir=cfg.sort.dir;
+    const sortField=cols[ci]&&cols[ci].field;
+    const isDateCol=sortField&&DATECOLS.includes(sortField);
     rows=rows.slice().sort((a,b)=>{
       let av=raw(a,ci),bv=raw(b,ci);
-      const an=Number(av),bn=Number(bv);
       let cmp;
-      if(isFinite(an)&&isFinite(bn))cmp=an-bn; else cmp=String(av).localeCompare(String(bv));
+      if(isDateCol){const ae=parseDate(av),be=parseDate(bv);
+        if(!isNaN(ae)&&!isNaN(be))cmp=ae-be; else cmp=String(av).localeCompare(String(bv));
+      } else {
+        const an=Number(av),bn=Number(bv);
+        if(isFinite(an)&&isFinite(bn))cmp=an-bn; else cmp=String(av).localeCompare(String(bv));
+      }
       return dir==='desc'?-cmp:cmp;
     });
   }
@@ -730,7 +738,12 @@ function renderTable(el,t){
     const ov=cfg.overrides&&cfg.overrides[ri+':'+ci];
     if(ov!==undefined)return ov;
     const v=raw(rows[ri],ci);
-    return v!==undefined?String(v):'';
+    if(v===undefined||v==='')return '';
+    // Detected date columns: render as yyyy-mm-dd (matches the date filter format),
+    // handling Excel serials and non-ISO strings. Falls back to raw if unparseable.
+    const f=cols[ci]&&cols[ci].field;
+    if(f&&DATECOLS.includes(f)){const e=parseDate(v);if(!isNaN(e))return toISOLocal(e);}
+    return String(v);
   };
   // ---- conditional formatting: precompute per-column stats ----
   const accent=tileColors(t,1)[0];
