@@ -173,6 +173,7 @@ input[type=color]{width:42px;height:30px;border-radius:8px;border:0.5px solid va
     <button class="icon-btn" id="refreshBtn" title="Refresh data"><svg class="ico" id="refreshIco" viewBox="0 0 24 24"><path d="M23 4v6h-6M1 20v-6h6M3.5 9a9 9 0 0114.9-3.4L23 10M1 14l4.6 4.4A9 9 0 0020.5 15"/></svg></button>
     <button class="btn" id="dateBtn"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><span id="dateLabel">Last 30 days</span><svg class="ico" style="width:13px;height:13px" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
     <button class="icon-btn" id="themeBtn" title="Toggle theme"><svg class="ico" id="themeIco" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z"/></svg></button>
+    <button class="btn" id="filtersBtn"><svg class="ico" viewBox="0 0 24 24"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg><span>Filters</span><span id="filtersCount" style="display:none;background:var(--accent);color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:2px"></span></button>
     <button class="btn" id="moreBtn" title="More"><svg class="ico" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>More</button>
     <button class="btn" id="saveBtn"><svg class="ico" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>Save</button>
     <button class="btn btn-primary" id="addBtn"><svg class="ico" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Add tile</button>
@@ -183,6 +184,7 @@ input[type=color]{width:42px;height:30px;border-radius:8px;border:0.5px solid va
   <span class="xfilter-pill" id="xfilterPill"><svg class="ico" style="width:14px;height:14px" viewBox="0 0 24 24"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg><span id="xfilterLabel"></span><span class="x" id="xfilterClear"><svg class="ico" style="width:14px;height:14px" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></span></span>
 </div>
 <div style="padding:0 26px"><div id="dsStatus" style="display:none;align-items:center;gap:8px;font-size:12px;padding:8px 13px;border-radius:10px;margin-top:6px"></div></div>
+<div id="pageFilterBar" style="padding:0 26px;margin-top:8px;display:none;flex-wrap:wrap;gap:7px;align-items:center"></div>
 <div class="canvas" id="canvas"><div class="grid-wrap"><div class="grid" id="grid"></div></div></div>
 
 <div class="scrim" id="scrim"></div>
@@ -283,6 +285,7 @@ let tiles=[];
 let editingId=null,draft=null;
 let xfilter=null; // {col, val}
 let dateRange={preset:'30',from:null,to:null};
+let pageFilters=[]; // [{col, vals:[]}] hard-applied to every tile
 
 function uid(){return 'T'+Math.random().toString(36).slice(2,8)}
 function dateBounds(){
@@ -306,8 +309,11 @@ function activeDateTo(){
 }
 function dateFiltered(){
   const from=activeDateFrom(),to=activeDateTo();
-  if(!from||!to)return liveRows();
-  return liveRows().filter(r=>!r.Date||(r.Date>=from&&r.Date<=to));
+  let rows=liveRows();
+  if(from&&to)rows=rows.filter(r=>!r.Date||(r.Date>=from&&r.Date<=to));
+  // page-level hard filters (applied everywhere, like the date range)
+  if(pageFilters.length)rows=rows.filter(r=>pageFilters.every(f=>!f.col||!f.vals||!f.vals.length||f.vals.includes(String(r[f.col]))));
+  return rows;
 }
 
 function applyFilters(rows,filters){
@@ -499,9 +505,23 @@ function refreshAll(){
     const el=document.querySelector('.tile[data-id="'+t.id+'"]');if(!el)return;
     if(t.type==='kpi')renderKpi(el.querySelector('.kpibody'),t);
     else renderPlot(el.querySelector('.plot'),t);
+    // update header sub/total in place (no rebuild = no blink)
+    const subEl=el.querySelector('.tile-sub');
+    if(subEl&&t.type!=='kpi')subEl.innerHTML=tileSubHTML(t);
   });
 }
 
+function tileSubHTML(t){
+  const label=t.type==='kpi'?'':(CHART_TYPES.find(c=>c.v===t.type)||{}).label;
+  if(t.type!=='kpi'&&t.showTotal){
+    const tot=tileTotal(t);
+    if(tot){
+      const sz=t.totalSize||13;
+      return '<span style="font-size:'+sz+'px;color:var(--text);font-weight:500">'+tot+'</span>'+(label?' <span style="color:var(--text3)">· '+label+'</span>':'');
+    }
+  }
+  return label?'<span style="color:var(--text3)">'+label+'</span>':'';
+}
 function tileTotal(t){
   // returns a short total/summary string for the tile header, or '' if not applicable
   try{
@@ -530,9 +550,8 @@ function render(){
     const d=document.createElement('div');d.className='tile';d.dataset.id=t.id;
     d.style.gridColumn='span '+t.w;d.style.gridRow='span '+t.h;
     if(t.type==='kpi')d.classList.add('kpi');
-    let sub=t.type==='kpi'?'':(CHART_TYPES.find(c=>c.v===t.type)||{}).label;
-    if(t.type!=='kpi'&&t.showTotal){const tot=tileTotal(t);if(tot)sub=tot+(sub?' · '+sub:'')}
-    d.innerHTML='<div class="tile-head"><div><div class="tile-title">'+t.title+'</div>'+(sub?'<div class="tile-sub">'+sub+'</div>':'')+'</div><div class="tile-menu"><button class="tmbtn cfg" title="Configure"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 15a1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg></button></div></div>'+(t.type==='kpi'?'<div class="kpibody"></div>':'<div class="plot"></div>')+'<div class="resize-h"><svg class="ico" style="width:14px;height:14px" viewBox="0 0 24 24"><path d="M22 22L2 22M22 22L22 2M22 22l-7-7"/></svg></div>';
+    let sub=t.type==='kpi'?'':tileSubHTML(t);
+    d.innerHTML='<div class="tile-head"><div><div class="tile-title">'+t.title+'</div>'+(t.type!=='kpi'?'<div class="tile-sub">'+sub+'</div>':(sub?'<div class="tile-sub">'+sub+'</div>':''))+'</div><div class="tile-menu"><button class="tmbtn cfg" title="Configure"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 15a1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg></button></div></div>'+(t.type==='kpi'?'<div class="kpibody"></div>':'<div class="plot"></div>')+'<div class="resize-h"><svg class="ico" style="width:14px;height:14px" viewBox="0 0 24 24"><path d="M22 22L2 22M22 22L22 2M22 22l-7-7"/></svg></div>';
     grid.appendChild(d);
     if(t.type==='kpi')renderKpi(d.querySelector('.kpibody'),t);
     else renderPlot(d.querySelector('.plot'),t);
@@ -675,7 +694,7 @@ function buildDrawer(){
   h+='<div class="field"><label>Tile size</label><div class="size-grid"><div><label style="text-transform:none;letter-spacing:0;color:var(--text3)">Width ('+t.w+'/12)</label><input type="number" id="f_w" min="2" max="12" value="'+t.w+'"></div><div><label style="text-transform:none;letter-spacing:0;color:var(--text3)">Height ('+t.h+')</label><input type="number" id="f_h" min="2" max="12" value="'+t.h+'"></div></div></div>';
   h+='<div class="field" id="tileSchemeField"></div>';h+='<div class="field" id="seriesColorField"></div>';
   if(t.type!=='kpi'){
-    h+='<div class="field"><label>Totals &amp; labels</label><div class="seg" id="labelSeg" style="margin-bottom:8px"><button data-v="0" class="'+(t.showLabels?'':'on')+'">No labels</button><button data-v="1" class="'+(t.showLabels?'on':'')+'">Show data labels</button></div><div class="seg" id="totalSeg"><button data-v="0" class="'+(t.showTotal?'':'on')+'">No total</button><button data-v="1" class="'+(t.showTotal?'on':'')+'">Show header total</button></div></div>';
+    h+='<div class="field"><label>Totals &amp; labels</label><div class="seg" id="labelSeg" style="margin-bottom:8px"><button data-v="0" class="'+(t.showLabels?'':'on')+'">No labels</button><button data-v="1" class="'+(t.showLabels?'on':'')+'">Show data labels</button></div><div class="seg" id="totalSeg" style="margin-bottom:8px"><button data-v="0" class="'+(t.showTotal?'':'on')+'">No total</button><button data-v="1" class="'+(t.showTotal?'on':'')+'">Show header total</button></div><div id="totalSizeWrap" style="display:'+(t.showTotal?'block':'none')+'"><label style="text-transform:none;letter-spacing:0;color:var(--text3);margin-bottom:6px">Total number size</label><div style="display:flex;align-items:center;gap:10px"><input type="range" id="f_totalsize" min="11" max="28" step="1" value="'+(t.totalSize||13)+'" style="flex:1"><span id="totalsizeOut" style="font-size:12.5px;color:var(--text2);min-width:42px;text-align:right">'+(t.totalSize||13)+'px</span></div></div></div>';
   }
   h+='<div class="field"><label>Filters (this tile)</label><div class="filter-list" id="filterList"></div><span class="chip add" id="addFilter"><svg class="ico" style="width:13px;height:13px" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Add filter</span></div>';
   b.innerHTML=h;
@@ -774,7 +793,8 @@ function bindAdaptive(){
   if(g('f_numsize'))g('f_numsize').oninput=e=>{draft.numSize=+e.target.value;const o=g('numsizeOut');if(o)o.textContent=e.target.value+'px'};
   if(g('numaccentSeg'))g('numaccentSeg').querySelectorAll('button').forEach(b=>b.onclick=()=>{draft.numAccent=b.dataset.v==='1';g('numaccentSeg').querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on')});
   if(g('labelSeg'))g('labelSeg').querySelectorAll('button').forEach(b=>b.onclick=()=>{draft.showLabels=b.dataset.v==='1';g('labelSeg').querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on')});
-  if(g('totalSeg'))g('totalSeg').querySelectorAll('button').forEach(b=>b.onclick=()=>{draft.showTotal=b.dataset.v==='1';g('totalSeg').querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on')});
+  if(g('totalSeg'))g('totalSeg').querySelectorAll('button').forEach(b=>b.onclick=()=>{draft.showTotal=b.dataset.v==='1';g('totalSeg').querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on');const w=g('totalSizeWrap');if(w)w.style.display=draft.showTotal?'block':'none'});
+  if(g('f_totalsize'))g('f_totalsize').oninput=e=>{draft.totalSize=+e.target.value;const o=g('totalsizeOut');if(o)o.textContent=e.target.value+'px'};
   [0,1,2].forEach(i=>{if(g('f_sankey'+i))g('f_sankey'+i).onchange=e=>{draft.sankeyCols[i]=e.target.value}});
 }
 function renderFilters(){
@@ -789,7 +809,24 @@ function renderFilters(){
   list.querySelectorAll('.fi-head .x').forEach(x=>x.onclick=e=>{const i=+e.currentTarget.dataset.i;draft.filters.splice(i,1);renderFilters()});
   list.querySelectorAll('.vchip').forEach(c=>c.onclick=e=>{const i=+c.dataset.i,v=c.dataset.v;const f=draft.filters[i];const k=f.vals.indexOf(v);if(k>=0)f.vals.splice(k,1);else f.vals.push(v);renderFilters()});
 }
-function applyDraft(){const i=tiles.findIndex(t=>t.id===editingId);if(i>=0)tiles[i]=JSON.parse(JSON.stringify(draft));closeDrawer();render();scheduleDraft()}
+function applyDraft(){
+  const i=tiles.findIndex(t=>t.id===editingId);
+  if(i>=0)tiles[i]=JSON.parse(JSON.stringify(draft));
+  const t=tiles[i];
+  const el=document.querySelector('.tile[data-id="'+t.id+'"]');
+  closeDrawer();
+  // size change requires grid span update; everything else re-renders in place
+  if(el){
+    el.style.gridColumn='span '+t.w;el.style.gridRow='span '+t.h;
+    // title + sub
+    const titleEl=el.querySelector('.tile-title');if(titleEl)titleEl.textContent=t.title;
+    const subEl=el.querySelector('.tile-sub');
+    if(subEl)subEl.innerHTML=(t.type==='kpi'?'':tileSubHTML(t));
+    if(t.type==='kpi'){const kb=el.querySelector('.kpibody');if(kb)renderKpi(kb,t);}
+    else {const pl=el.querySelector('.plot');if(pl){renderPlot(pl,t);Plotly.Plots.resize(pl);}}
+  } else { render(); }
+  scheduleDraft();
+}
 
 document.getElementById('applyTile').onclick=applyDraft;
 document.getElementById('deleteTile').onclick=()=>{tiles=tiles.filter(t=>t.id!==editingId);closeDrawer();render();scheduleDraft()};
@@ -849,6 +886,53 @@ document.getElementById('moreBtn').onclick=()=>{
     });
   });
 };
+/* ---------- page-level filters (hard filter, applies to all tiles) ---------- */
+function applyPageFilters(){
+  pageFilters=pageFilters.filter(f=>f.col&&f.vals&&f.vals.length);
+  renderPageFilterBar();
+  const c=document.getElementById('filtersCount');
+  if(pageFilters.length){c.style.display='inline-block';c.textContent=pageFilters.length}else c.style.display='none';
+  refreshAll(); // in-place, no rebuild
+  scheduleDraft();
+}
+function renderPageFilterBar(){
+  const bar=document.getElementById('pageFilterBar');
+  if(!pageFilters.length){bar.style.display='none';bar.innerHTML='';return}
+  bar.style.display='flex';
+  bar.innerHTML='<span style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">Page filters</span>'+
+    pageFilters.map((f,i)=>'<span class="chip" style="border-color:var(--accent);color:var(--accent)">'+f.col+': '+(f.vals.length>2?(f.vals.slice(0,2).join(', ')+' +'+(f.vals.length-2)):f.vals.join(', '))+' <span class="x pf-x" data-i="'+i+'" style="cursor:pointer;display:inline-flex"><svg class="ico" style="width:13px;height:13px" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></span></span>').join('')+
+    '<span class="chip add" id="pf-clear" style="cursor:pointer">Clear all</span>';
+  bar.querySelectorAll('.pf-x').forEach(x=>x.onclick=()=>{pageFilters.splice(+x.dataset.i,1);applyPageFilters()});
+  const clr=bar.querySelector('#pf-clear');if(clr)clr.onclick=()=>{pageFilters=[];applyPageFilters()};
+}
+document.getElementById('filtersBtn').onclick=()=>{
+  const catCols=CAT.length?CAT:COLS;
+  let h='<div style="width:280px;max-height:72vh;overflow-y:auto"><div style="font-size:14px;font-weight:500;margin-bottom:10px">Page filters</div>';
+  h+='<div style="font-size:11px;color:var(--text3);margin-bottom:10px">Hard-filters every tile, like the date range.</div>';
+  h+='<div id="pf-list"></div>';
+  h+='<span class="chip add" id="pf-add" style="margin-top:4px"><svg class="ico" style="width:13px;height:13px" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Add filter</span>';
+  h+='<button class="btn btn-primary" id="pf-apply" style="width:100%;justify-content:center;margin-top:12px;font-size:12.5px">Apply</button></div>';
+  showPop(document.getElementById('filtersBtn'),h,p=>{
+    // work on a draft copy
+    let draftPF=JSON.parse(JSON.stringify(pageFilters));
+    function drawList(){
+      const list=p.querySelector('#pf-list');list.innerHTML='';
+      draftPF.forEach((f,i)=>{
+        const vals=[...new Set(liveRows().map(r=>String(r[f.col])))].sort();
+        const item=document.createElement('div');item.className='filter-item';
+        item.innerHTML='<div class="fi-head"><select class="pfcol" data-i="'+i+'" style="width:auto;flex:1;margin-right:8px">'+catCols.map(c=>'<option value="'+c+'"'+(c===f.col?' selected':'')+'>'+c+'</option>').join('')+'</select><span class="x" data-i="'+i+'" style="cursor:pointer"><svg class="ico" style="width:15px;height:15px" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></span></div><div class="chips">'+vals.map(v=>'<span class="chip pfv" data-i="'+i+'" data-v="'+v.replace(/"/g,'&quot;')+'" style="cursor:pointer;'+(f.vals.includes(v)?'border-color:var(--accent);color:var(--accent)':'opacity:.6')+'">'+v+'</span>').join('')+'</div>';
+        list.appendChild(item);
+      });
+      list.querySelectorAll('.pfcol').forEach(s=>s.onchange=e=>{const i=+e.target.dataset.i;draftPF[i].col=e.target.value;draftPF[i].vals=[];drawList()});
+      list.querySelectorAll('.fi-head .x').forEach(x=>x.onclick=e=>{draftPF.splice(+e.currentTarget.dataset.i,1);drawList()});
+      list.querySelectorAll('.pfv').forEach(c=>c.onclick=()=>{const i=+c.dataset.i,v=c.dataset.v;const arr=draftPF[i].vals;const k=arr.indexOf(v);if(k>=0)arr.splice(k,1);else arr.push(v);drawList()});
+    }
+    drawList();
+    p.querySelector('#pf-add').onclick=()=>{draftPF.push({col:catCols[0],vals:[]});drawList()};
+    p.querySelector('#pf-apply').onclick=()=>{pageFilters=draftPF;closePop();applyPageFilters()};
+  });
+};
+
 const DATE_PRESETS=[['30','Last 30 days'],['7','Last 7 days'],['month','This month'],['all','All time']];
 document.getElementById('dateBtn').onclick=()=>{
   const b=dateBounds();
@@ -856,8 +940,8 @@ document.getElementById('dateBtn').onclick=()=>{
   DATE_PRESETS.forEach(([v,l])=>{h+='<button class="preset'+(dateRange.preset===v?' on':'')+'" data-v="'+v+'">'+l+'</button>'});
   h+='<div style="border-top:0.5px solid var(--border);margin-top:10px;padding-top:12px"><div style="font-size:11px;color:var(--text3);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">Custom range</div><div style="display:flex;flex-direction:column;gap:8px"><div style="display:flex;align-items:center;gap:8px"><span style="font-size:11px;color:var(--text3);width:30px;flex:none">From</span><input type="date" id="d_from" value="'+(dateRange.from||b.min)+'" min="'+b.min+'" max="'+b.max+'" style="font-size:12.5px;padding:8px 10px;flex:1;min-width:0"></div><div style="display:flex;align-items:center;gap:8px"><span style="font-size:11px;color:var(--text3);width:30px;flex:none">To</span><input type="date" id="d_to" value="'+(dateRange.to||b.max)+'" min="'+b.min+'" max="'+b.max+'" style="font-size:12.5px;padding:8px 10px;flex:1;min-width:0"></div></div><button class="btn btn-primary" id="d_apply" style="width:100%;justify-content:center;margin-top:10px;font-size:12.5px">Apply custom</button></div></div>';
   showPop(document.getElementById('dateBtn'),h,p=>{
-    p.querySelectorAll('.preset').forEach(btn=>btn.onclick=()=>{dateRange.preset=btn.dataset.v;setDateLabel();closePop();render()});
-    p.querySelector('#d_apply').onclick=()=>{dateRange.preset='custom';dateRange.from=p.querySelector('#d_from').value;dateRange.to=p.querySelector('#d_to').value;setDateLabel();closePop();render()};
+    p.querySelectorAll('.preset').forEach(btn=>btn.onclick=()=>{dateRange.preset=btn.dataset.v;setDateLabel();closePop();refreshAll()});
+    p.querySelector('#d_apply').onclick=()=>{dateRange.preset='custom';dateRange.from=p.querySelector('#d_from').value;dateRange.to=p.querySelector('#d_to').value;setDateLabel();closePop();refreshAll()};
   });
 };
 function setDateLabel(){
