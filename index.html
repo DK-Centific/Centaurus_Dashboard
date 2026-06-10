@@ -158,11 +158,19 @@ button{font-family:var(--font);cursor:pointer;border:none;background:none;color:
 .tile.placeholder>*{opacity:0;transition:opacity .15s}
 .tile.shift{transition:transform .4s var(--spring)}
 .tile.resizing{transition:none!important;box-shadow:0 14px 40px rgba(0,0,0,.3);border-color:var(--accent)}
-.tile-head{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:6px}
+.tile-head{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:6px;padding-left:20px}
+.tile.kpi .tile-head{padding-left:20px}
 .tile-title{font-size:calc(13.5px*var(--fscale,1));font-weight:500;letter-spacing:-.2px;color:var(--text)}
 .tile-sub{font-size:calc(11px*var(--fscale,1));color:var(--text3);margin-top:1px}
 .tile-menu{display:flex;gap:4px;opacity:0;transition:opacity .2s}
 .tile:hover .tile-menu{opacity:1}
+.drag-handle{position:absolute;top:8px;left:8px;width:22px;height:22px;display:flex;align-items:center;justify-content:center;cursor:grab;opacity:0;transition:opacity .2s,transform .15s var(--spring);touch-action:none;z-index:6}
+.tile:hover .drag-handle{opacity:.85}
+.drag-handle:hover{opacity:1!important;transform:scale(1.15)}
+.drag-handle:active{cursor:grabbing}
+.drag-handle .dh-dot{width:11px;height:11px;border-radius:50%;background:var(--text3);border:2px solid var(--card);box-shadow:0 0 0 1px var(--border2)}
+.drag-handle:hover .dh-dot{background:var(--accent)}
+.tile.lifted .drag-handle{cursor:grabbing}
 .tmbtn{width:24px;height:24px;border-radius:7px;display:flex;align-items:center;justify-content:center;color:var(--text3);transition:all .2s}
 .tmbtn:hover{background:var(--card2);color:var(--text)}
 .plot{flex:1;min-height:0;width:100%}
@@ -430,6 +438,7 @@ let editingId=null,draft=null;
 let xfilter=null; // {col, val}
 let dateRange={preset:'30',from:null,to:null,col:''};
 let pageFilters=[]; // [{col, vals:[]}] hard-applied to every tile
+let pageExcludeEmpty=[]; // columns: drop rows blank in ANY of these, page-wide (empty = off)
 
 function uid(){return 'T'+Math.random().toString(36).slice(2,8)}
 // Parse many date shapes into epoch ms (or NaN). Handles ISO, ISO+time, M/D/Y, long dates, Excel serials.
@@ -487,14 +496,15 @@ function dateFiltered(){
     rows=rows.filter(r=>{const e=parseDate(r[dc]);return isNaN(e)||(e>=fromE&&e<=toE)});
   }
   // page-level hard filters (applied everywhere, like the date range)
-  if(pageFilters.length)rows=rows.filter(r=>pageFilters.every(f=>!f.col||!f.vals||!f.vals.length||f.vals.includes(String(r[f.col]))));
+  if(pageFilters.length)rows=rows.filter(r=>pageFilters.every(f=>!f.col||!f.vals||!f.vals.length||f.vals.includes(dimVal(f.col,r[f.col]))));
+  if(pageExcludeEmpty.length)rows=rows.filter(r=>pageExcludeEmpty.every(c=>!isBlank(r[c])));
   return rows;
 }
 
 function applyFilters(rows,filters){
   return rows.filter(r=>filters.every(f=>{
     if(!f.col||!f.vals||!f.vals.length)return true;
-    return f.vals.includes(String(r[f.col]));
+    return f.vals.includes(dimVal(f.col,r[f.col]));
   }));
 }
 function aggregate(vals,agg){
@@ -508,13 +518,24 @@ function aggregate(vals,agg){
   if(agg==='max')return Math.max(...nums);
   return vals.length;
 }
+// Normalize a raw cell into its display/key form. For date columns, render as
+// yyyy-mm-dd (handles Excel serials + non-ISO strings) so charts never show raw numbers.
+function dimVal(col,raw){
+  if(col&&DATECOLS.includes(col)){const e=parseDate(raw);if(!isNaN(e))return toISOLocal(e);}
+  return String(raw);
+}
+// Sort keys date-aware when the column is a date column, else alphabetically.
+function sortKeys(col,keys){
+  if(col&&DATECOLS.includes(col))return keys.slice().sort((a,b)=>{const ae=parseDate(a),be=parseDate(b);if(isNaN(ae)&&isNaN(be))return a<b?-1:a>b?1:0;if(isNaN(ae))return 1;if(isNaN(be))return -1;return ae-be});
+  return keys.slice().sort();
+}
 function groupAgg(rows,dim,measure,agg){
   const m={};
   // For unique count we need the real column values; for plain count we use 1.
   const useCol=(measure!=='__count__')||(agg==='unique');
-  rows.forEach(r=>{const k=String(r[dim]);(m[k]=m[k]||[]).push(useCol?r[measure]:1)});
+  rows.forEach(r=>{const k=dimVal(dim,r[dim]);(m[k]=m[k]||[]).push(useCol?r[measure]:1)});
   const effAgg=(measure==='__count__'&&agg!=='unique')?'count':agg;
-  return Object.keys(m).sort().map(k=>({key:k,val:aggregate(m[k],effAgg)}));
+  return sortKeys(dim,Object.keys(m)).map(k=>({key:k,val:aggregate(m[k],effAgg)}));
 }
 function tileColors(t,n){
   // precedence: manual per-series colors override individual slots over the
@@ -683,11 +704,11 @@ function renderPlot(el,t){
     traces=[{type:'scatter',mode:t.showLabels?'lines+markers+text':'lines',x:lkeys,y:g.map(d=>+d.val.toFixed(1)),line:{color:cols[0],width:2.5,shape:'spline'},fill:'tozeroy',fillcolor:'rgba(127,119,221,.12)',text:t.showLabels?g.map(d=>fmtCompact(d.val)):undefined,textposition:'top center',textfont:{size:labelSizes(t,lkeys)},customdata:lkeys.map(k=>[k,dispKey(t,k)]),hovertemplate:'%{customdata[1]}<br>'+(measureLabel(t)?measureLabel(t)+': ':'')+'%{y}<extra></extra>'}];
     layout.xaxis=Object.assign({},layout.xaxis,{tickmode:'array',tickvals:lkeys,ticktext:lkeys.map(k=>truncLabel(dispKey(t,k),12))});
   } else if(t.type==='stacked'){
-    const seriesKeys=[...new Set(rows.map(r=>String(r[t.series])))].sort();
-    const dimKeys=[...new Set(rows.map(r=>String(r[t.dim])))].sort();
+    const seriesKeys=sortKeys(t.series,[...new Set(rows.map(r=>dimVal(t.series,r[t.series])))]);
+    const dimKeys=sortKeys(t.dim,[...new Set(rows.map(r=>dimVal(t.dim,r[t.dim])))]);
     const op=catOpacities(dimKeys,t.dim);
     traces=seriesKeys.map((sk,i)=>{const ys=dimKeys.map(dk=>{
-      const sub=rows.filter(r=>String(r[t.dim])===dk&&String(r[t.series])===sk);
+      const sub=rows.filter(r=>dimVal(t.dim,r[t.dim])===dk&&dimVal(t.series,r[t.series])===sk);
       return +aggregate(sub.map(r=>((t.measure!=='__count__')||(t.agg==='unique'))?r[t.measure]:1),(t.measure==='__count__'&&t.agg!=='unique')?'count':t.agg).toFixed(1);
     });return {type:'bar',name:dispKey(t,sk),x:dimKeys,y:ys,marker:{color:cols[i],opacity:op},
       text:t.showLabels?ys.map(v=>v?fmtCompact(v):''):undefined,
@@ -698,9 +719,9 @@ function renderPlot(el,t){
   } else if(t.type==='histogram'){
     traces=[{type:'histogram',x:rows.map(r=>r[t.measure]),nbinsx:t.bins||14,marker:{color:cols[0],line:{color:css('--bg'),width:1}},hovertemplate:'%{x}<br>%{y}<extra></extra>'}];
   } else if(t.type==='box'){
-    const dimKeys=[...new Set(rows.map(r=>String(r[t.dim])))].sort();
+    const dimKeys=sortKeys(t.dim,[...new Set(rows.map(r=>dimVal(t.dim,r[t.dim])))]);
     const base=tileColors(t,dimKeys.length);
-    traces=dimKeys.map((dk,i)=>({type:'box',name:dk,y:rows.filter(r=>String(r[t.dim])===dk).map(r=>r[t.measure]),
+    traces=dimKeys.map((dk,i)=>({type:'box',name:dk,y:rows.filter(r=>dimVal(t.dim,r[t.dim])===dk).map(r=>r[t.measure]),
       marker:{color:(xfilter&&xfilter.col===t.dim&&dk!==xfilter.val)?'rgba(150,150,170,0.3)':base[i]},
       line:{width:2},boxmean:true}));
     layout.font.size=12;layout.font.color=css('--text');layout.xaxis.tickfont={size:12,family:'-apple-system'};layout.yaxis.tickfont={size:12};
@@ -716,10 +737,10 @@ function renderPlot(el,t){
     });
     if(t.color){layout.showlegend=true;layout.legend={orientation:'h',y:-0.22,font:{size:9}};layout.margin.b=44}
   } else if(t.type==='heatmap'){
-    const xk=[...new Set(rows.map(r=>String(r[t.series])))].sort();
-    const yk=[...new Set(rows.map(r=>String(r[t.dim])))].sort();
+    const xk=sortKeys(t.series,[...new Set(rows.map(r=>dimVal(t.series,r[t.series])))]);
+    const yk=sortKeys(t.dim,[...new Set(rows.map(r=>dimVal(t.dim,r[t.dim])))]);
     const z=yk.map(y=>xk.map(x=>{
-      const sub=rows.filter(r=>String(r[t.dim])===y&&String(r[t.series])===x);
+      const sub=rows.filter(r=>dimVal(t.dim,r[t.dim])===y&&dimVal(t.series,r[t.series])===x);
       return +aggregate(sub.map(r=>((t.measure!=='__count__')||(t.agg==='unique'))?r[t.measure]:1),(t.measure==='__count__'&&t.agg!=='unique')?'count':t.agg).toFixed(1);
     }));
     const c=cols[0];
@@ -785,7 +806,7 @@ function renderTable(el,t){
     cfg._ovMigrated=true;
   }
   let rows=applyFilters(dateFiltered(),t.filters);rows=excludeEmptyRows(t,rows);
-  if(xfilter)rows=rows.filter(r=>String(r[xfilter.col])===xfilter.val);
+  if(xfilter)rows=rows.filter(r=>dimVal(xfilter.col,r[xfilter.col])===xfilter.val);
   const cols=cfg.columns||[];
   // raw value for a given source row + column (pre-override)
   const raw=(r,ci)=>{const f=cols[ci]&&cols[ci].field;return (f&&r&&r[f]!==undefined)?r[f]:''};
@@ -945,10 +966,11 @@ function kpiValueForWindow(t,fromISO,toISO){
     const fromE=parseDate(fromISO),toE=parseDate(toISO)+86399999;
     rows=rows.filter(r=>{const e=parseDate(r[dc]);return isNaN(e)||(e>=fromE&&e<=toE)});
   }
-  if(pageFilters.length)rows=rows.filter(r=>pageFilters.every(f=>!f.col||!f.vals||!f.vals.length||f.vals.includes(String(r[f.col]))));
+  if(pageFilters.length)rows=rows.filter(r=>pageFilters.every(f=>!f.col||!f.vals||!f.vals.length||f.vals.includes(dimVal(f.col,r[f.col]))));
+  if(pageExcludeEmpty.length)rows=rows.filter(r=>pageExcludeEmpty.every(c=>!isBlank(r[c])));
   rows=applyFilters(rows,t.filters);
   rows=excludeEmptyRows(t,rows);
-  if(xfilter)rows=rows.filter(r=>String(r[xfilter.col])===xfilter.val);
+  if(xfilter)rows=rows.filter(r=>dimVal(xfilter.col,r[xfilter.col])===xfilter.val);
   const useCol=(t.measure!=='__count__')||(t.agg==='unique');
   const vals=rows.map(r=>useCol?r[t.measure]:1);
   return aggregate(vals,(t.measure==='__count__'&&t.agg!=='unique')?'count':t.agg);
@@ -986,7 +1008,7 @@ function kpiCompareRef(t,currentVal){
 
 function renderKpi(el,t){
   let rows=applyFilters(dateFiltered(),t.filters);rows=excludeEmptyRows(t,rows);
-  if(xfilter)rows=rows.filter(r=>String(r[xfilter.col])===xfilter.val);
+  if(xfilter)rows=rows.filter(r=>dimVal(xfilter.col,r[xfilter.col])===xfilter.val);
   const useCol=(t.measure!=='__count__')||(t.agg==='unique');
   const vals=rows.map(r=>useCol?r[t.measure]:1);
   let v=aggregate(vals,(t.measure==='__count__'&&t.agg!=='unique')?'count':t.agg);
@@ -1057,7 +1079,7 @@ function tileTotal(t){
   // returns a short total/summary string for the tile header, or '' if not applicable
   try{
     let rows=applyFilters(dateFiltered(),t.filters);rows=excludeEmptyRows(t,rows);
-    if(xfilter)rows=rows.filter(r=>String(r[xfilter.col])===xfilter.val);
+    if(xfilter)rows=rows.filter(r=>dimVal(xfilter.col,r[xfilter.col])===xfilter.val);
     const fmt=n=>fmtCompact(n);
     if(['bar','pie','line','stacked'].includes(t.type)){
       const measure=t.measure;
@@ -1080,7 +1102,7 @@ function buildTileNode(t){
   d.style.gridColumn='span '+t.w;d.style.gridRow='span '+t.h;
   if(t.type==='kpi')d.classList.add('kpi');
   let sub=t.type==='kpi'?'':tileSubHTML(t);
-  d.innerHTML='<div class="tile-head"><div><div class="tile-title">'+t.title+'</div>'+(t.type!=='kpi'?'<div class="tile-sub">'+sub+'</div>':(sub?'<div class="tile-sub">'+sub+'</div>':''))+'</div><div class="tile-menu"><button class="tmbtn dup" title="Duplicate tile"><svg class="ico" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button><button class="tmbtn cfg" title="Configure"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 15a1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg></button></div></div>'+(t.type==='kpi'?'<div class="kpibody"></div>':'<div class="plot"></div>')+'<div class="resize-h"><svg class="ico" style="width:14px;height:14px" viewBox="0 0 24 24"><path d="M22 22L2 22M22 22L22 2M22 22l-7-7"/></svg></div>';
+  d.innerHTML='<div class="drag-handle" title="Drag to move tile"><span class="dh-dot"></span></div><div class="tile-head"><div><div class="tile-title">'+t.title+'</div>'+(t.type!=='kpi'?'<div class="tile-sub">'+sub+'</div>':(sub?'<div class="tile-sub">'+sub+'</div>':''))+'</div><div class="tile-menu"><button class="tmbtn dup" title="Duplicate tile"><svg class="ico" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button><button class="tmbtn cfg" title="Configure"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 15a1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg></button></div></div>'+(t.type==='kpi'?'<div class="kpibody"></div>':'<div class="plot"></div>')+'<div class="resize-h"><svg class="ico" style="width:14px;height:14px" viewBox="0 0 24 24"><path d="M22 22L2 22M22 22L22 2M22 22l-7-7"/></svg></div>';
   if(t.type==='kpi')renderKpi(d.querySelector('.kpibody'),t);
   else renderPlot(d.querySelector('.plot'),t);
   d.querySelector('.cfg').onclick=e=>{e.stopPropagation();openDrawer(t.id)};
@@ -1109,6 +1131,12 @@ function attachDrag(el,t){
     if(e.target.closest('.tmbtn')||e.target.closest('.resize-h'))return;
     if(e.button!==undefined&&e.button!==0)return;
     const sx=e.clientX,sy=e.clientY;
+    // Drag handle (top-left circle): start moving immediately, no hold delay.
+    if(e.target.closest('.drag-handle')){
+      e.preventDefault();
+      startLift(el,t,sx,sy);
+      return;
+    }
     holdTimer=setTimeout(()=>{cleanup();startLift(el,t,sx,sy)},250);
     function early(ev){if(Math.abs(ev.clientX-sx)>6||Math.abs(ev.clientY-sy)>6){clearTimeout(holdTimer);cleanup()}}
     function up(){clearTimeout(holdTimer);cleanup()}
@@ -1517,7 +1545,7 @@ function bindAdaptive(){
 function renderFilters(){
   const list=document.getElementById('filterList');if(!list)return;list.innerHTML='';
   draft.filters.forEach((f,i)=>{
-    const vals=[...new Set(liveRows().map(r=>String(r[f.col])))].sort();
+    const vals=sortKeys(f.col,[...new Set(liveRows().map(r=>dimVal(f.col,r[f.col])))]);
     const item=document.createElement('div');item.className='filter-item';
     item.innerHTML='<div class="fi-head"><select class="ffcol" data-i="'+i+'" style="width:auto;flex:1;margin-right:8px">'+opt(CAT,f.col)+'</select><span class="x" data-i="'+i+'"><svg class="ico" style="width:15px;height:15px" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></span></div><div class="chips">'+vals.map(v=>'<span class="chip vchip" data-i="'+i+'" data-v="'+v.replace(/"/g,'&quot;')+'" style="cursor:pointer;'+(f.vals.includes(v)?'border-color:var(--accent);color:var(--accent)':'opacity:.6')+'">'+v+'</span>').join('')+'</div>';
     list.appendChild(item);
@@ -1655,19 +1683,25 @@ function applyPageFilters(){
   pageFilters=pageFilters.filter(f=>f.col&&f.vals&&f.vals.length);
   renderPageFilterBar();
   const c=document.getElementById('filtersCount');
-  if(pageFilters.length){c.style.display='inline-block';c.textContent=pageFilters.length}else c.style.display='none';
+  const total=pageFilters.length+pageExcludeEmpty.length;
+  if(total){c.style.display='inline-block';c.textContent=total}else c.style.display='none';
   refreshAll(); // in-place, no rebuild
   scheduleDraft();
 }
 function renderPageFilterBar(){
   const bar=document.getElementById('pageFilterBar');
-  if(!pageFilters.length){bar.style.display='none';bar.innerHTML='';return}
+  if(!pageFilters.length&&!pageExcludeEmpty.length){bar.style.display='none';bar.innerHTML='';return}
   bar.style.display='flex';
-  bar.innerHTML='<span style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">Page filters</span>'+
-    pageFilters.map((f,i)=>'<span class="chip" style="border-color:var(--accent);color:var(--accent)">'+f.col+': '+(f.vals.length>2?(f.vals.slice(0,2).join(', ')+' +'+(f.vals.length-2)):f.vals.join(', '))+' <span class="x pf-x" data-i="'+i+'" style="cursor:pointer;display:inline-flex"><svg class="ico" style="width:13px;height:13px" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></span></span>').join('')+
-    '<span class="chip add" id="pf-clear" style="cursor:pointer">Clear all</span>';
+  let inner='<span style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">Page filters</span>'+
+    pageFilters.map((f,i)=>'<span class="chip" style="border-color:var(--accent);color:var(--accent)">'+f.col+': '+(f.vals.length>2?(f.vals.slice(0,2).join(', ')+' +'+(f.vals.length-2)):f.vals.join(', '))+' <span class="x pf-x" data-i="'+i+'" style="cursor:pointer;display:inline-flex"><svg class="ico" style="width:13px;height:13px" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></span></span>').join('');
+  if(pageExcludeEmpty.length){
+    inner+='<span class="chip" style="border-color:var(--accent);color:var(--accent)">No empty: '+(pageExcludeEmpty.length>2?(pageExcludeEmpty.slice(0,2).join(', ')+' +'+(pageExcludeEmpty.length-2)):pageExcludeEmpty.join(', '))+' <span class="x pe-x" style="cursor:pointer;display:inline-flex"><svg class="ico" style="width:13px;height:13px" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></span></span>';
+  }
+  inner+='<span class="chip add" id="pf-clear" style="cursor:pointer">Clear all</span>';
+  bar.innerHTML=inner;
   bar.querySelectorAll('.pf-x').forEach(x=>x.onclick=()=>{pageFilters.splice(+x.dataset.i,1);applyPageFilters()});
-  const clr=bar.querySelector('#pf-clear');if(clr)clr.onclick=()=>{pageFilters=[];applyPageFilters()};
+  const pe=bar.querySelector('.pe-x');if(pe)pe.onclick=()=>{pageExcludeEmpty=[];applyPageFilters()};
+  const clr=bar.querySelector('#pf-clear');if(clr)clr.onclick=()=>{pageFilters=[];pageExcludeEmpty=[];applyPageFilters()};
 }
 document.getElementById('filtersBtn').onclick=()=>{
   const catCols=CAT.length?CAT:COLS;
@@ -1675,14 +1709,31 @@ document.getElementById('filtersBtn').onclick=()=>{
   h+='<div style="font-size:11px;color:var(--text3);margin-bottom:10px">Hard-filters every tile, like the date range.</div>';
   h+='<div id="pf-list"></div>';
   h+='<span class="chip add" id="pf-add" style="margin-top:4px"><svg class="ico" style="width:13px;height:13px" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Add filter</span>';
-  h+='<button class="btn btn-primary" id="pf-apply" style="width:100%;justify-content:center;margin-top:12px;font-size:12.5px">Apply</button></div>';
+  h+='<div style="border-top:0.5px solid var(--border);margin:14px 0 10px"></div>';
+  h+='<div style="font-size:12.5px;font-weight:500;margin-bottom:4px">Exclude empty values</div>';
+  h+='<div style="font-size:11px;color:var(--text3);margin-bottom:8px">Drops rows blank in any selected column, page-wide.</div>';
+  h+='<div class="chips" id="pf-empty">'+catCols.map(c=>'<span class="chip pfe" data-c="'+c.replace(/"/g,'&quot;')+'" style="cursor:pointer">'+c+'</span>').join('')+'</div>';
+  h+='<button class="btn btn-primary" id="pf-apply" style="width:100%;justify-content:center;margin-top:14px;font-size:12.5px">Apply</button></div>';
   showPop(document.getElementById('filtersBtn'),h,p=>{
     // work on a draft copy
     let draftPF=JSON.parse(JSON.stringify(pageFilters));
+    let draftPE=pageExcludeEmpty.slice();
+    // style + wire the exclude-empty column chips (in-place toggle, no flash)
+    p.querySelectorAll('.pfe').forEach(c=>{
+      const col=c.dataset.c;
+      const on=draftPE.includes(col);
+      if(on){c.style.borderColor='var(--accent)';c.style.color='var(--accent)';c.style.opacity='1';}else{c.style.opacity='.6';}
+      c.onclick=()=>{
+        const k=draftPE.indexOf(col);const nowOn=(k<0);
+        if(nowOn)draftPE.push(col); else draftPE.splice(k,1);
+        if(nowOn){c.style.borderColor='var(--accent)';c.style.color='var(--accent)';c.style.opacity='1';}
+        else {c.style.borderColor='';c.style.color='';c.style.opacity='.6';}
+      };
+    });
     function drawList(){
       const list=p.querySelector('#pf-list');list.innerHTML='';
       draftPF.forEach((f,i)=>{
-        const vals=[...new Set(liveRows().map(r=>String(r[f.col])))].sort();
+        const vals=sortKeys(f.col,[...new Set(liveRows().map(r=>dimVal(f.col,r[f.col])))]);
         const item=document.createElement('div');item.className='filter-item';
         item.innerHTML='<div class="fi-head"><select class="pfcol" data-i="'+i+'" style="width:auto;flex:1;margin-right:8px">'+catCols.map(c=>'<option value="'+c+'"'+(c===f.col?' selected':'')+'>'+c+'</option>').join('')+'</select><span class="x" data-i="'+i+'" style="cursor:pointer"><svg class="ico" style="width:15px;height:15px" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></span></div><div class="chips">'+vals.map(v=>'<span class="chip pfv" data-i="'+i+'" data-v="'+v.replace(/"/g,'&quot;')+'" style="cursor:pointer;'+(f.vals.includes(v)?'border-color:var(--accent);color:var(--accent)':'opacity:.6')+'">'+v+'</span>').join('')+'</div>';
         list.appendChild(item);
@@ -1700,7 +1751,7 @@ document.getElementById('filtersBtn').onclick=()=>{
     }
     drawList();
     p.querySelector('#pf-add').onclick=()=>{draftPF.push({col:catCols[0],vals:[]});drawList()};
-    p.querySelector('#pf-apply').onclick=()=>{pageFilters=draftPF;closePop();applyPageFilters()};
+    p.querySelector('#pf-apply').onclick=()=>{pageFilters=draftPF;pageExcludeEmpty=draftPE;closePop();applyPageFilters()};
   });
 };
 
@@ -1806,6 +1857,8 @@ function getState(){
     fscale:fscale,
     datasetId:activeDatasetId,
     theme:theme,
+    pageFilters:pageFilters,
+    pageExcludeEmpty:pageExcludeEmpty,
     ownerName:ownerName()
   };
 }
@@ -1817,9 +1870,14 @@ function applyState(s){
   themeOverride=s.themeOverride||{};
   PALETTE=Array.isArray(s.palette)&&s.palette.length?s.palette:schemeByName(globalScheme).slice();
   dateRange=s.dateRange||{preset:'all',from:null,to:null};
+  pageFilters=Array.isArray(s.pageFilters)?s.pageFilters:[];
+  pageExcludeEmpty=Array.isArray(s.pageExcludeEmpty)?s.pageExcludeEmpty:[];
   fscale=s.fscale||1;document.body.style.setProperty('--fscale',fscale);
   if(s.theme){theme=s.theme}
   setDateLabel();
+  // reflect restored page-wide filters/exclusions in the bar + count badge
+  renderPageFilterBar();
+  const _fc=document.getElementById('filtersCount');if(_fc){const _tot=pageFilters.length+pageExcludeEmpty.length;if(_tot){_fc.style.display='inline-block';_fc.textContent=_tot}else _fc.style.display='none';}
   // if the saved dataset differs, switch to it (re-detects schema), else just render
   if(s.datasetId&&s.datasetId!==activeDatasetId&&DATASETS.find(d=>d.id===s.datasetId)){
     switchDatasetThenRender(s.datasetId);
